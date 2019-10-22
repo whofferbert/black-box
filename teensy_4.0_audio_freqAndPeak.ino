@@ -1,4 +1,4 @@
-// testing ground
+// testing grounds
 
 #include <Audio.h>
 #include <Wire.h>
@@ -11,10 +11,13 @@
 
 //#include "ILI9341_t3.h"
 
-//apparently causes problems for other things that use
-// attachInterrupt()
+// apparently ENCODER_OPTIMIZE_INTERRUPTS causes problems 
+// for other things that use attachInterrupt()?
+// unless Paul fixed it
 //#define ENCODER_OPTIMIZE_INTERRUPTS
 #include <Encoder.h>
+#include <Bounce2.h>
+#include <ResponsiveAnalogRead.h>
 
 // GUItool: begin automatically generated code
 AudioInputI2S            i2s2;           //xy=288.23333740234375,264.23333740234375
@@ -62,13 +65,17 @@ unsigned long delayMillisInterval = 1000;
 uint8_t rotation = 3;
 bool displayNeedsUpdate = true;
 
+// main menu
+uint8_t currentMenu = 0;
+uint8_t currentMenuSelection = 0;
+
 /*
  * 
  * menu stuff
  *
  */
 
-char *mainMenu[] = {
+char* mainMenu[] = {
   "Stuff and things!",
   "foo & bar",
   "baz & qux",
@@ -83,14 +90,41 @@ uint8_t mainMenuSize = 8;
 
 uint8_t mainMenuPosition = 0;
 
+// global settings
+char* menuTwo[] = {
+  "Master Volume",
+  "Master Tone",
+  "Care,",
+  "Accuracy",
+  "Spelllchekin",
+  "Illicit Intake",
+  "Self Loathing",
+  "Tits"
+};
 
+// moar stuff !!! D:
 
+char* menuTitles[] = {
+  "Sounds",
+  "Globals",
+  "Que???"
+};
 
+//char* activeMenu = menuTitles[0];
+
+void adjustMenuPointers(int8_t) {
+  // stuff
+  // point title pointer to array element
+  // point 
+}
+
+// TODO uuuuuuuuuhhhgh
+// array of pointers to pointers of pointers?
 
 // hardware setup
 // Encoder name(DT, CLK)
 Encoder leftRE(28,31);
-Encoder middleRE(32, 30);
+Encoder middleRE(32,30);
 Encoder rightRE(5,3);
 
 unsigned long previousREUpdate = 0;
@@ -99,6 +133,8 @@ unsigned long REMillisInterval = 40;
 long leftREPos = 0;
 long middleREPos = 0;
 long rightREPos = 0;
+
+
 
 
 /*
@@ -136,10 +172,11 @@ char* fontSize4Line = "-------------";
 char* fontSize5Line = "----------";
 char* fontSize6Line = "--------";
 
+
+// aside from vanity changes, this should be okay
 void welcomeScreen() {
   unsigned long start = micros();
   tft.fillScreen(ILI9341_BLACK);
-  //unsigned long start = micros();
   tft.setCursor(0, 0);
   tft.setTextColor(ILI9341_RED);  
   tft.setTextSize(4);
@@ -157,14 +194,9 @@ void welcomeScreen() {
   tft.println();
   tft.println(fontSize1Line);
   tft.println();
-  //tft.println();
-  //tft.println();
-  //tft.println();
   tft.setTextColor(ILI9341_GREEN);    
   tft.setTextSize(2);
   tft.println("   by William Hofferbert");
-  //tft.println();
-  //tft.println();
   tft.setTextSize(1);
   tft.println();
   tft.println(fontSize1Line);
@@ -173,8 +205,11 @@ void welcomeScreen() {
   Serial.println(micros() - start);
 }
 
+
+// this is going to be a relay function for a number of knobs
+// move from menu to menu, possibly redraw.
 void updatePedalMenu() {
-  static int printCounts;
+  //static int printCounts;
   unsigned long start = micros();
   menuHeader();
   tft.setTextSize(3);      
@@ -191,7 +226,7 @@ void updatePedalMenu() {
   //if (printCounts < 20) {
     Serial.print("updatePedalMenu microseconds: ");
     Serial.println(micros() - start);
-    printCounts+=1;
+  //  printCounts+=1;
   //}
 }
 
@@ -204,10 +239,11 @@ void placeHolderMenuHeader() {
 
 
 void menuHeader() {
+  tft.setTextColor(ILI9341_BLUE); 
   tft.setCursor(0, 0);
   tft.setTextSize(5);
   // TODO some array of pointers for menu headers
-  tft.println("Main Menu");
+  tft.println("Mane Menyu");
 }
 
 void pedalMenu() {
@@ -230,19 +266,21 @@ void pedalMenu() {
   Serial.println(micros() - start);
 }
 
-// left rotary encoder handles menu up/down stuff
+
+// left rotary encoder handles main menu up/down stuff
 void updateLeftRotaryEncoder() {
-  long newLeft;
+  //long newLeft;
   bool updated = false;
-  newLeft = leftRE.read();
+  long newLeft = leftRE.read();
   // TODO when mainMenuPosition gets reset, also reset the rotary encoder position
-  if (newLeft - leftREPos > 2) {
+  long diff = newLeft - leftREPos;
+  if (diff > 2) {
     mainMenuPosition+=1;
     if (mainMenuPosition >= mainMenuSize) {
       mainMenuPosition = 0;
     }
     updated = true; 
-  } else if (newLeft - leftREPos < -2) {
+  } else if (diff < -2) {
     if (mainMenuPosition > 0) {
       mainMenuPosition-=1;
     } else {
@@ -259,16 +297,32 @@ void updateLeftRotaryEncoder() {
   }
 }
 
+// middle RE handles middle menu (mods/available)
 void updateMiddleRotaryEncoder() {
   long newMiddle;
   newMiddle = middleRE.read();
-  if (newMiddle != middleREPos) {
+  long diff = newMiddle - middleREPos;
+  bool updated = false;
+  if (diff > 2) {
+    // clockwise
+    // main menu right
+    updated = true;
+  } else if (diff < -2) {
+    // ccw
+    // main menu left
+    updated = true;
+  }
+  if (updated == true) {
     middleREPos = newMiddle;
     Serial.print("Middle RE new position: ");
     Serial.println(newMiddle);
+    // other things,
+    
   }
 }
 
+
+// right knob controls mod value assignment tasks 
 void updateRightRotaryEncoder() {
   long newRight;
   newRight = rightRE.read();
@@ -279,6 +333,9 @@ void updateRightRotaryEncoder() {
   }
 }
 
+
+
+// update all the rotary encoder triggers
 void updateRotaryEncoders() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousREUpdate > REMillisInterval) {
@@ -289,6 +346,9 @@ void updateRotaryEncoders() {
   }
 }
 
+
+
+// not used any more, automatic menu scrolling
 void displayIntervalTest() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousDisplayUpdate > delayMillisInterval) {
@@ -305,6 +365,8 @@ void displayIntervalTest() {
   
 }
 
+
+// loop tasks for frequency stuff
 void freqAndNote() {
   bool printed = false;  
   if (notefreq1.available()) {
@@ -349,6 +411,11 @@ void freqAndNote() {
 // for best effect with freqAndNote, make your terminal/monitor 
 // a minimum of 62 chars wide, and as tall as you can.
 void loop() {
+  // update pots and stuff first
+  //displayIntervalTest();
+  updateRotaryEncoders();
+
+  // audio interaction
   freqAndNote();
   
   //update screen if we need to
@@ -358,6 +425,4 @@ void loop() {
     displayNeedsUpdate = false;
   }
 
-  //displayIntervalTest();
-  updateRotaryEncoders();
 }
