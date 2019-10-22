@@ -1,4 +1,5 @@
 // testing grounds
+// Audio includes
 
 #include <Audio.h>
 #include <Wire.h>
@@ -6,10 +7,14 @@
 #include <SD.h>
 #include <SerialFlash.h>
 
+// ILI9341 includes
+
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
 
 //#include "ILI9341_t3.h"
+
+// hardware includes
 
 // apparently ENCODER_OPTIMIZE_INTERRUPTS causes problems 
 // for other things that use attachInterrupt()?
@@ -18,6 +23,51 @@
 #include <Encoder.h>
 #include <Bounce2.h>
 #include <ResponsiveAnalogRead.h>
+
+// hardware setup
+
+// Rotary Encoder Switches
+
+#define LEFT_RE_SWITCH_PIN   29
+#define MIDDLE_RE_SWITCH_PIN 33
+#define RIGHT_RE_SWITCH_PIN  4
+
+Bounce leftRESwitch = Bounce();
+Bounce middleRESwitch = Bounce();
+Bounce rightRESwitch = Bounce();
+
+// Foot Switches
+
+Bounce leftToggleFS = Bounce();
+Bounce rightToggleFS = Bounce();
+Bounce leftMomentaryFS = Bounce();
+Bounce rightMomentaryFS = Bounce();
+
+// Analog Reads on the Pots
+
+ResponsiveAnalogRead leftTopPot(A13,false);
+ResponsiveAnalogRead leftBottomPot(A12,false);
+ResponsiveAnalogRead middleTopPot(A11,false);
+ResponsiveAnalogRead middleBottomPot(A10,false);
+ResponsiveAnalogRead rightTopPot(A8,false);
+ResponsiveAnalogRead rightBottomPot(A2,false);
+ResponsiveAnalogRead sixWay(A0,false);
+
+// Rotary Encoders
+// Encoder name(DT, CLK)
+Encoder leftRE(28,31);
+Encoder middleRE(32,30);
+Encoder rightRE(5,3);
+
+unsigned long previousREUpdate = 0;
+unsigned long REMillisInterval = 40;
+
+long leftREPos = 0;
+long middleREPos = 0;
+long rightREPos = 0;
+
+
+// audio objects:
 
 // GUItool: begin automatically generated code
 AudioInputI2S            i2s2;           //xy=288.23333740234375,264.23333740234375
@@ -39,17 +89,9 @@ AudioControlSGTL5000     sgtl5000_1;     //xy=477.23333740234375,486.23333740234
 #define SDCARD_MOSI_PIN  7
 #define SDCARD_SCK_PIN   14
 
-// Use these with the Teensy 3.5 & 3.6 SD card
-//#define SDCARD_CS_PIN    BUILTIN_SDCARD
-//#define SDCARD_MOSI_PIN  11  // not actually used
-//#define SDCARD_SCK_PIN   13  // not actually used
 
-// Use these for the SD+Wiz820 or other adaptors
-//#define SDCARD_CS_PIN    4
-//#define SDCARD_MOSI_PIN  11
-//#define SDCARD_SCK_PIN   13
-
-//ILI9341 attached
+// ILI9341 attached to SPI2
+// CS tied to ground, RST tied to 3v3
 #define TFT_CS   -1
 #define TFT_DC   36
 #define TFT_MOSI 35
@@ -59,15 +101,22 @@ AudioControlSGTL5000     sgtl5000_1;     //xy=477.23333740234375,486.23333740234
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
 //ILI9341_t3 tft = ILI9341_t3(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
 
+
+
 // display updating
 unsigned long previousDisplayUpdate = 0;
 unsigned long delayMillisInterval = 1000;
 uint8_t rotation = 3;
-bool displayNeedsUpdate = true;
+bool displayNeedsUpdate = false;
 
-// main menu
+// main menus ... should these be pointers?
 uint8_t currentMenu = 0;
-uint8_t currentMenuSelection = 0;
+uint8_t lastMenuSelection = 0;
+// menu up/down selections
+//uint8_t currentMenuSelection = 0;
+uint8_t mainMenuPosition = 0;
+uint8_t modMenuPosition = 0;
+uint8_t assignmentMenuPosition = 0;
 
 /*
  * 
@@ -88,10 +137,9 @@ char* mainMenu[] = {
 
 uint8_t mainMenuSize = 8;
 
-uint8_t mainMenuPosition = 0;
-
 // global settings
-char* menuTwo[] = {
+// this might have to be built dynamically.... guuh.
+char* modMenu[] = {
   "Master Volume",
   "Master Tone",
   "Care,",
@@ -102,16 +150,19 @@ char* menuTwo[] = {
   "Tits"
 };
 
+uint8_t modMenuSize = 8;
+
 // moar stuff !!! D:
 
 char* menuTitles[] = {
   "Sounds",
-  "Globals",
-  "Que???"
+  "Mods",
+  "Assign"
 };
+uint8_t menuTitlesLength = 3;
 
 //char* activeMenu = menuTitles[0];
-
+// this  might not be needed?
 void adjustMenuPointers(int8_t) {
   // stuff
   // point title pointer to array element
@@ -120,19 +171,6 @@ void adjustMenuPointers(int8_t) {
 
 // TODO uuuuuuuuuhhhgh
 // array of pointers to pointers of pointers?
-
-// hardware setup
-// Encoder name(DT, CLK)
-Encoder leftRE(28,31);
-Encoder middleRE(32,30);
-Encoder rightRE(5,3);
-
-unsigned long previousREUpdate = 0;
-unsigned long REMillisInterval = 40;
-
-long leftREPos = 0;
-long middleREPos = 0;
-long rightREPos = 0;
 
 
 
@@ -143,23 +181,6 @@ long rightREPos = 0;
  * 
  */
 
-
-void setup() {
-  Serial.begin(9600);
-  tft.begin();
-  tft.setRotation(rotation);
-  AudioMemory(90);
-  sgtl5000_1.enable();
-  sgtl5000_1.volume(0.5);
-  sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
-  welcomeScreen();
-  // set pin interrupts
-  
-  notefreq1.begin(.15);
-  delay(4200);
-  //delay(3250);
-  pedalMenu();
-}
 
 /*
  * tft print vars
@@ -205,65 +226,64 @@ void welcomeScreen() {
   Serial.println(micros() - start);
 }
 
-
-// this is going to be a relay function for a number of knobs
-// move from menu to menu, possibly redraw.
-void updatePedalMenu() {
-  //static int printCounts;
-  unsigned long start = micros();
-  menuHeader();
-  tft.setTextSize(3);      
-  tft.setTextColor(ILI9341_GREEN);
-  for (int i=0; i < mainMenuSize; i++) {
-    if (i == mainMenuPosition) {
-      tft.setTextColor(ILI9341_RED);
-      tft.println(mainMenu[i]);
-      tft.setTextColor(ILI9341_GREEN);    
-    } else {
-      tft.println(mainMenu[i]);
-    }
-  }
-  //if (printCounts < 20) {
-    Serial.print("updatePedalMenu microseconds: ");
-    Serial.println(micros() - start);
-  //  printCounts+=1;
-  //}
-}
-
-void placeHolderMenuHeader() {
-  tft.setCursor(0, 0);
-  tft.setTextSize(5);      
-  tft.println("");
-}
-
-
-
-void menuHeader() {
-  tft.setTextColor(ILI9341_BLUE); 
+// this will be a landing point for many things probably
+void menuHeader(uint32_t headerColor) {
+  tft.setTextColor(headerColor); 
   tft.setCursor(0, 0);
   tft.setTextSize(5);
   // TODO some array of pointers for menu headers
-  tft.println("Mane Menyu");
+  // should say "Sounds"
+  //tft.println(menuTitles[currentMenu]);
+  tft.println(menuTitles[lastMenuSelection]);
 }
 
-void pedalMenu() {
+// can i do this with just pointers?
+void drawPedalMenu(uint32_t text, uint32_t highlight, uint32_t header) {
   unsigned long start = micros();
-  tft.fillScreen(ILI9341_BLACK);
-  menuHeader();
-  tft.setTextSize(3);      
-  tft.setTextColor(ILI9341_GREEN);
+  //menuHeader(ILI9341_BLUE);
+  menuHeader(header);
+  tft.setTextSize(3);
+  tft.setTextColor(text);
   for (int i=0; i < mainMenuSize; i++) {
     if (i == mainMenuPosition) {
       //tft.setTextColor(ILI9341_WHITE);
-      tft.setTextColor(ILI9341_RED);
+      tft.setTextColor(highlight);
       tft.println(mainMenu[i]);
-      tft.setTextColor(ILI9341_GREEN);    
+      tft.setTextColor(text);    
     } else {
       tft.println(mainMenu[i]);
     }
   }
   Serial.print("pedalMenu microseconds: ");
   Serial.println(micros() - start);
+}
+
+
+// handler for screen changes
+void updatePedalScreen() {
+  // should check if current menu is different than last
+  // if so, blank and reset some things
+  if (currentMenu != lastMenuSelection) {
+    // redraw menu
+    if (lastMenuSelection == 0) {
+      drawPedalMenu(ILI9341_BLACK,ILI9341_BLACK,ILI9341_BLACK);
+      //black text print
+    } else if (lastMenuSelection == 1) {
+      //black text print
+    } else if (lastMenuSelection == 2){
+      //black text print
+    }
+    lastMenuSelection = currentMenu;
+  }
+  if (currentMenu == 0) {
+    drawPedalMenu(ILI9341_GREEN,ILI9341_RED,ILI9341_BLUE);
+  } else if (currentMenu == 1) {
+    drawPedalMenu(ILI9341_GREEN,ILI9341_RED,ILI9341_BLUE);
+  } else if (currentMenu == 2) {
+    // something
+    return;
+  }
+  displayNeedsUpdate = false;
 }
 
 
@@ -285,7 +305,6 @@ void updateLeftRotaryEncoder() {
       mainMenuPosition-=1;
     } else {
       mainMenuPosition = mainMenuSize - 1;
-      //leftRE.write(0);
     }
     updated = true; 
   }
@@ -407,6 +426,69 @@ void freqAndNote() {
 }
 
 
+void updateREButtons() {
+  // stuff
+  leftRESwitch.update();
+  if (leftRESwitch.fell()) {
+    // button pressed
+    Serial.println("Pressed left RE button");
+    // change menu to modMenu
+    if (currentMenu == 0) {
+      // update screen to mod menu
+      currentMenu = 1;
+      displayNeedsUpdate = true;
+    }
+  }
+  middleRESwitch.update();
+  rightRESwitch.update();
+}
+
+void updateAnalogs() {
+  // stuff
+  leftTopPot.update();
+  leftBottomPot.update();
+  middleTopPot.update();
+  middleBottomPot.update();
+  rightTopPot.update();
+  rightBottomPot.update();
+  sixWay.update();
+  return;
+}
+
+
+void updateFootSwitches() {
+  // stuff
+  return;
+}
+
+
+void setup() {
+  Serial.begin(9600);
+  tft.begin();
+  tft.setRotation(rotation);
+  AudioMemory(90);
+  sgtl5000_1.enable();
+  sgtl5000_1.volume(0.5);
+  sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
+  welcomeScreen();
+
+  // set pin interrupts
+  leftRESwitch.attach(LEFT_RE_SWITCH_PIN, INPUT_PULLUP);
+  middleRESwitch.attach(MIDDLE_RE_SWITCH_PIN, INPUT_PULLUP);
+  rightRESwitch.attach(RIGHT_RE_SWITCH_PIN, INPUT_PULLUP);
+  leftRESwitch.interval(25);
+  middleRESwitch.interval(25);
+  rightRESwitch.interval(25);
+
+  // music setup
+  notefreq1.begin(.15);
+
+  delay(4200);
+  //delay(3250);
+  tft.fillScreen(ILI9341_BLACK);
+  drawPedalMenu(ILI9341_GREEN, ILI9341_RED, ILI9341_BLUE);
+}
+
 
 // for best effect with freqAndNote, make your terminal/monitor 
 // a minimum of 62 chars wide, and as tall as you can.
@@ -414,6 +496,9 @@ void loop() {
   // update pots and stuff first
   //displayIntervalTest();
   updateRotaryEncoders();
+  updateREButtons();
+  updateAnalogs();
+  updateFootSwitches();
 
   // audio interaction
   freqAndNote();
@@ -421,8 +506,7 @@ void loop() {
   //update screen if we need to
   if (displayNeedsUpdate == true) {
     //Serial.println("updating display ...");
-    updatePedalMenu();
-    displayNeedsUpdate = false;
+    updatePedalScreen();
   }
 
 }
