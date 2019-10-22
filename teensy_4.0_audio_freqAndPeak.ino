@@ -72,7 +72,7 @@ char *mainMenu[] = {
   "Stuff and things!",
   "foo & bar",
   "baz & qux",
-  "chumblespuzz + qix + fizz",
+  "chumblespuzz + xj",
   "another one",
   "do it again",
   "Captain",
@@ -94,7 +94,7 @@ Encoder middleRE(32, 30);
 Encoder rightRE(5,3);
 
 unsigned long previousREUpdate = 0;
-unsigned long REMillisInterval = 50;
+unsigned long REMillisInterval = 40;
 
 long leftREPos = 0;
 long middleREPos = 0;
@@ -120,9 +120,21 @@ void setup() {
   // set pin interrupts
   
   notefreq1.begin(.15);
-  delay(3250);
+  delay(4200);
+  //delay(3250);
   pedalMenu();
 }
+
+/*
+ * tft print vars
+ */
+
+char* fontSize1Line = "-----------------------------------------------------";
+char* fontSize2Line = "--------------------------";
+char* fontSize3Line = "-----------------";
+char* fontSize4Line = "-------------";
+char* fontSize5Line = "----------";
+char* fontSize6Line = "--------";
 
 void welcomeScreen() {
   unsigned long start = micros();
@@ -131,13 +143,31 @@ void welcomeScreen() {
   tft.setCursor(0, 0);
   tft.setTextColor(ILI9341_RED);  
   tft.setTextSize(4);
-  tft.println("Audio Hacker");
+  tft.println();
+  tft.println("     The");
+  tft.println(" Audio Hacker");
+  tft.setTextSize(1);
+  tft.println();
+  tft.println(fontSize1Line);
+  tft.println();
   tft.setTextColor(ILI9341_YELLOW); 
   tft.setTextSize(2);
-  tft.println("A pedal full of nonesense");
+  tft.println(" A pedal full of nonesense");
+  tft.setTextSize(1);
+  tft.println();
+  tft.println(fontSize1Line);
+  tft.println();
+  //tft.println();
+  //tft.println();
+  //tft.println();
   tft.setTextColor(ILI9341_GREEN);    
   tft.setTextSize(2);
-  tft.println("by William Hofferbert");
+  tft.println("   by William Hofferbert");
+  //tft.println();
+  //tft.println();
+  tft.setTextSize(1);
+  tft.println();
+  tft.println(fontSize1Line);
   tft.println();
   Serial.print("welcomeScreen microseconds: ");
   Serial.println(micros() - start);
@@ -151,18 +181,18 @@ void updatePedalMenu() {
   tft.setTextColor(ILI9341_GREEN);
   for (int i=0; i < mainMenuSize; i++) {
     if (i == mainMenuPosition) {
-      tft.setTextColor(ILI9341_WHITE);
+      tft.setTextColor(ILI9341_RED);
       tft.println(mainMenu[i]);
       tft.setTextColor(ILI9341_GREEN);    
     } else {
       tft.println(mainMenu[i]);
     }
   }
-  if (printCounts < 20) {
+  //if (printCounts < 20) {
     Serial.print("updatePedalMenu microseconds: ");
     Serial.println(micros() - start);
     printCounts+=1;
-  }
+  //}
 }
 
 void placeHolderMenuHeader() {
@@ -175,7 +205,8 @@ void placeHolderMenuHeader() {
 
 void menuHeader() {
   tft.setCursor(0, 0);
-  tft.setTextSize(5);      
+  tft.setTextSize(5);
+  // TODO some array of pointers for menu headers
   tft.println("Main Menu");
 }
 
@@ -187,7 +218,8 @@ void pedalMenu() {
   tft.setTextColor(ILI9341_GREEN);
   for (int i=0; i < mainMenuSize; i++) {
     if (i == mainMenuPosition) {
-      tft.setTextColor(ILI9341_WHITE);
+      //tft.setTextColor(ILI9341_WHITE);
+      tft.setTextColor(ILI9341_RED);
       tft.println(mainMenu[i]);
       tft.setTextColor(ILI9341_GREEN);    
     } else {
@@ -198,29 +230,62 @@ void pedalMenu() {
   Serial.println(micros() - start);
 }
 
+// left rotary encoder handles menu up/down stuff
+void updateLeftRotaryEncoder() {
+  long newLeft;
+  bool updated = false;
+  newLeft = leftRE.read();
+  // TODO when mainMenuPosition gets reset, also reset the rotary encoder position
+  if (newLeft - leftREPos > 2) {
+    mainMenuPosition+=1;
+    if (mainMenuPosition >= mainMenuSize) {
+      mainMenuPosition = 0;
+    }
+    updated = true; 
+  } else if (newLeft - leftREPos < -2) {
+    if (mainMenuPosition > 0) {
+      mainMenuPosition-=1;
+    } else {
+      mainMenuPosition = mainMenuSize - 1;
+      //leftRE.write(0);
+    }
+    updated = true; 
+  }
+  if (updated == true) {
+    leftREPos = newLeft;
+    displayNeedsUpdate = true;
+    Serial.print("Left RE new position: ");
+    Serial.println(newLeft);  
+  }
+}
+
+void updateMiddleRotaryEncoder() {
+  long newMiddle;
+  newMiddle = middleRE.read();
+  if (newMiddle != middleREPos) {
+    middleREPos = newMiddle;
+    Serial.print("Middle RE new position: ");
+    Serial.println(newMiddle);
+  }
+}
+
+void updateRightRotaryEncoder() {
+  long newRight;
+  newRight = rightRE.read();
+  if (newRight != rightREPos) {
+    rightREPos = newRight;
+    Serial.print("Right RE new position: ");
+    Serial.println(newRight);
+  }
+}
+
 void updateRotaryEncoders() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousREUpdate > REMillisInterval) {
     previousREUpdate = currentMillis;
-    long newLeft, newRight, newMiddle;
-    newLeft = leftRE.read();
-    newMiddle = middleRE.read();
-    newRight = rightRE.read();
-    if (newLeft != leftREPos) {
-      leftREPos = newLeft;
-      Serial.print("Left RE new position: ");
-      Serial.println(newLeft);
-    }
-    if (newMiddle != middleREPos) {
-      middleREPos = newMiddle;
-      Serial.print("Middle RE new position: ");
-      Serial.println(newMiddle);
-    }
-    if (newRight != rightREPos) {
-      rightREPos = newRight;
-      Serial.print("Right RE new position: ");
-      Serial.println(newRight);
-    }
+    updateLeftRotaryEncoder();
+    updateMiddleRotaryEncoder();
+    updateRightRotaryEncoder();
   }
 }
 
@@ -281,18 +346,18 @@ void freqAndNote() {
 
 
 
-// for best effect make your terminal/monitor a minimum of 62 chars wide and as high as you can.
+// for best effect with freqAndNote, make your terminal/monitor 
+// a minimum of 62 chars wide, and as tall as you can.
 void loop() {
   freqAndNote();
   
   //update screen if we need to
   if (displayNeedsUpdate == true) {
     //Serial.println("updating display ...");
-    // run updates to display
     updatePedalMenu();
     displayNeedsUpdate = false;
   }
 
-  displayIntervalTest();
+  //displayIntervalTest();
   updateRotaryEncoders();
 }
