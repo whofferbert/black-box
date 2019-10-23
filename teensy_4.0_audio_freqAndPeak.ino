@@ -134,6 +134,8 @@ uint8_t assignMenuPosition = 0;
 // to determine a sound and various other settings
 // ..........
 
+// this should be an array of all the patches there are
+
 char* mainMenu[] = {
   "Stuff and things!",
   "foo & bar",
@@ -146,6 +148,9 @@ char* mainMenu[] = {
 };
 
 uint8_t mainMenuSize = 8;
+
+// this should be an array of all the bits you can fiddle with 
+// inside each member of the patch set
 
 // global settings ?
 // this might have to be built dynamically.... guuh.
@@ -180,7 +185,7 @@ char* menuTitles[] = {
   "Assign"
 };
 
-uint8_t menuTitlesLength = 3;
+uint8_t menuTitlesSize = 3;
 
 // pointers to menus
 
@@ -188,6 +193,10 @@ char ** titlePointer = menuTitles;
 char ** menuPointer = mainMenu;
 uint8_t * menuLengthPointer = &mainMenuSize;
 uint8_t * menuPositionPointer = &mainMenuPosition;
+
+// menu timers
+unsigned long lastMenuAction = 0;
+unsigned long menuRefreshDelay = 4500;
 
 /*
  * 
@@ -304,7 +313,7 @@ void updatePedalScreen() {
     menuPointer = modMenu;
     menuLengthPointer = &modMenuSize;
     menuPositionPointer = &modMenuPosition;
-    drawPedalMenu(ILI9341_GREEN,ILI9341_BLUE,ILI9341_PURPLE);
+    drawPedalMenu(ILI9341_GREEN,ILI9341_BLUE,ILI9341_RED);
   } else if (currentMenu == 2) {
     // something
     menuPointer = assignMenu;
@@ -312,6 +321,7 @@ void updatePedalScreen() {
     menuPositionPointer = &assignMenuPosition;
     drawPedalMenu(ILI9341_GREEN,ILI9341_YELLOW,ILI9341_WHITE);
   }
+  lastMenuAction = millis();
   displayNeedsUpdate = false;
 }
 
@@ -324,19 +334,27 @@ void updateLeftRotaryEncoder() {
   //long newLeft;
   bool updated = false;
   long newLeft = leftRE.read();
-  // TODO when mainMenuPosition gets reset, also reset the rotary encoder position
+  // pointers to menu things
+  //char ** text = menuPointer;
+  uint8_t * menuSize = menuLengthPointer;
+  uint8_t * menuPos = menuPositionPointer;
   long diff = newLeft - leftREPos;
   if (diff > 2) {
-    mainMenuPosition+=1;
-    if (mainMenuPosition >= mainMenuSize) {
-      mainMenuPosition = 0;
+    //mainMenuPosition+=1;
+    //if (mainMenuPosition >= mainMenuSize) {
+      //mainMenuPosition = 0;
+    *menuPos+=1;
+    if (*menuPos >= *menuSize) {
+      *menuPos = 0;
     }
     updated = true; 
   } else if (diff < -2) {
-    if (mainMenuPosition > 0) {
-      mainMenuPosition-=1;
+    //if (mainMenuPosition > 0) {
+    //  mainMenuPosition-=1;
+    if (*menuPos > 0) {
+      *menuPos-=1;
     } else {
-      mainMenuPosition = mainMenuSize - 1;
+      *menuPos = *menuSize - 1;
     }
     updated = true; 
   }
@@ -465,11 +483,12 @@ void updateREButtons() {
     // button pressed
     Serial.println("Pressed left RE button");
     // change menu to modMenu
-    if (currentMenu == 0) {
-      // update screen to mod menu
-      currentMenu = 1;
-      displayNeedsUpdate = true;
+    if (currentMenu < menuTitlesSize - 1) {
+      currentMenu += 1;
+    } else {
+      currentMenu = 0;
     }
+    displayNeedsUpdate = true;
   }
   middleRESwitch.update();
   rightRESwitch.update();
@@ -522,6 +541,18 @@ void setup() {
 }
 
 
+void timeoutMenuInactivity() {
+  if (currentMenu != 0) {
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastMenuAction > menuRefreshDelay) {
+      //drop back to main menu
+      lastMenuAction = currentMillis;
+      currentMenu = 0;
+      displayNeedsUpdate = true;
+    }
+  }
+}
+
 // for best effect with freqAndNote, make your terminal/monitor 
 // a minimum of 62 chars wide, and as tall as you can.
 void loop() {
@@ -535,14 +566,12 @@ void loop() {
   // audio interaction
   freqAndNote();
 
-  // some sort of sub here to make the screen update to the 
-  // main menu after too long of a timeout on some other screen
-  // 
+  // go back to main menu automatically
+  timeoutMenuInactivity();
  
   //update screen if we need to
   if (displayNeedsUpdate == true) {
     //Serial.println("updating display ...");
     updatePedalScreen();
   }
-
 }
