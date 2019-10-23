@@ -1,4 +1,4 @@
-// testing grounds
+// testing grounds!
 // Audio includes
 
 #include <Audio.h>
@@ -14,6 +14,11 @@
 
 //#include "ILI9341_t3.h"
 
+// TODO sd card files:
+//const char* filelist[] = {
+//  "menuItems.txt"
+//};
+
 // hardware includes
 
 // apparently ENCODER_OPTIMIZE_INTERRUPTS causes problems 
@@ -23,8 +28,6 @@
 #include <Encoder.h>
 #include <Bounce2.h>
 #include <ResponsiveAnalogRead.h>
-
-// hardware setup
 
 // Rotary Encoder Switches
 
@@ -116,13 +119,20 @@ uint8_t lastMenuSelection = 0;
 //uint8_t currentMenuSelection = 0;
 uint8_t mainMenuPosition = 0;
 uint8_t modMenuPosition = 0;
-uint8_t assignmentMenuPosition = 0;
+uint8_t assignMenuPosition = 0;
 
 /*
  * 
  * menu stuff
  *
  */
+
+
+// maybe every sound get's it's own include thing
+// then we can add an include at the top
+// and perhaps look for expected things in each of those
+// to determine a sound and various other settings
+// ..........
 
 char* mainMenu[] = {
   "Stuff and things!",
@@ -137,7 +147,7 @@ char* mainMenu[] = {
 
 uint8_t mainMenuSize = 8;
 
-// global settings
+// global settings ?
 // this might have to be built dynamically.... guuh.
 char* modMenu[] = {
   "Master Volume",
@@ -152,6 +162,16 @@ char* modMenu[] = {
 
 uint8_t modMenuSize = 8;
 
+
+char* assignMenu[] = {
+  "Knob",
+  "Defaut Value",
+  "Save"
+};
+
+uint8_t assignMenuSize = 3;
+
+
 // moar stuff !!! D:
 
 char* menuTitles[] = {
@@ -159,21 +179,15 @@ char* menuTitles[] = {
   "Mods",
   "Assign"
 };
+
 uint8_t menuTitlesLength = 3;
 
-//char* activeMenu = menuTitles[0];
-// this  might not be needed?
-void adjustMenuPointers(int8_t) {
-  // stuff
-  // point title pointer to array element
-  // point 
-}
+// pointers to menus
 
-// TODO uuuuuuuuuhhhgh
-// array of pointers to pointers of pointers?
-
-
-
+char ** titlePointer = menuTitles;
+char ** menuPointer = mainMenu;
+uint8_t * menuLengthPointer = &mainMenuSize;
+uint8_t * menuPositionPointer = &mainMenuPosition;
 
 /*
  * 
@@ -238,20 +252,23 @@ void menuHeader(uint32_t headerColor) {
 }
 
 // can i do this with just pointers?
-void drawPedalMenu(uint32_t text, uint32_t highlight, uint32_t header) {
+// 
+void drawPedalMenu(uint32_t textColor, uint32_t highlightColor, uint32_t headerColor) {
+  // maybe the pointers are just managed elsewhere?
+  char ** text = menuPointer;
+  uint8_t * menuSize = menuLengthPointer;
+  uint8_t * menuPos = menuPositionPointer; 
   unsigned long start = micros();
-  //menuHeader(ILI9341_BLUE);
-  menuHeader(header);
+  menuHeader(headerColor);
   tft.setTextSize(3);
-  tft.setTextColor(text);
-  for (int i=0; i < mainMenuSize; i++) {
-    if (i == mainMenuPosition) {
-      //tft.setTextColor(ILI9341_WHITE);
-      tft.setTextColor(highlight);
-      tft.println(mainMenu[i]);
-      tft.setTextColor(text);    
+  tft.setTextColor(textColor);
+  for (int i=0; i < *menuSize; i++) {
+    if (i == *menuPos) {
+      tft.setTextColor(highlightColor);
+      tft.println(text[i]);
+      tft.setTextColor(textColor);    
     } else {
-      tft.println(mainMenu[i]);
+      tft.println(text[i]);
     }
   }
   Serial.print("pedalMenu microseconds: ");
@@ -265,29 +282,44 @@ void updatePedalScreen() {
   // if so, blank and reset some things
   if (currentMenu != lastMenuSelection) {
     // redraw menu
-    if (lastMenuSelection == 0) {
+    //if (lastMenuSelection == 0) {
       drawPedalMenu(ILI9341_BLACK,ILI9341_BLACK,ILI9341_BLACK);
       //black text print
-    } else if (lastMenuSelection == 1) {
+    //} else if (lastMenuSelection == 1) {
       //black text print
-    } else if (lastMenuSelection == 2){
+    //} else if (lastMenuSelection == 2){
       //black text print
-    }
+    //}
     lastMenuSelection = currentMenu;
   }
   if (currentMenu == 0) {
+    // switch pointers around
+    menuPointer = mainMenu;
+    menuLengthPointer = &mainMenuSize;
+    menuPositionPointer = &mainMenuPosition;
     drawPedalMenu(ILI9341_GREEN,ILI9341_RED,ILI9341_BLUE);
   } else if (currentMenu == 1) {
-    drawPedalMenu(ILI9341_GREEN,ILI9341_RED,ILI9341_BLUE);
+    //drawPedalMenu(ILI9341_GREEN,ILI9341_RED,ILI9341_BLUE);
+    // mmmm
+    menuPointer = modMenu;
+    menuLengthPointer = &modMenuSize;
+    menuPositionPointer = &modMenuPosition;
+    drawPedalMenu(ILI9341_GREEN,ILI9341_BLUE,ILI9341_PURPLE);
   } else if (currentMenu == 2) {
     // something
-    return;
+    menuPointer = assignMenu;
+    menuLengthPointer = &assignMenuSize;
+    menuPositionPointer = &assignMenuPosition;
+    drawPedalMenu(ILI9341_GREEN,ILI9341_YELLOW,ILI9341_WHITE);
   }
   displayNeedsUpdate = false;
 }
 
+// hmmm .... maybe these can be handled with pointers as well
 
 // left rotary encoder handles main menu up/down stuff
+// maybe this rotary encoder should handle all the screen actions
+// so far it's just twisting and clicking ....
 void updateLeftRotaryEncoder() {
   //long newLeft;
   bool updated = false;
@@ -502,7 +534,11 @@ void loop() {
 
   // audio interaction
   freqAndNote();
-  
+
+  // some sort of sub here to make the screen update to the 
+  // main menu after too long of a timeout on some other screen
+  // 
+ 
   //update screen if we need to
   if (displayNeedsUpdate == true) {
     //Serial.println("updating display ...");
