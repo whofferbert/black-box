@@ -26,8 +26,10 @@ const int midiChannel = 1;
 
 // midi note/peak buffer lengths.
 // note: must be multiple of 2!
+// maybe make this 16? 24?
 const int noteRingBufferLength = 8;
 const int peakRingBufferLength = 8;
+const int midiMinimumVelocityThreshold = 5;
 
 // GUItool: begin automatically generated code
 AudioInputTDM            tdm1;           //xy=256.75,414.75
@@ -128,13 +130,12 @@ signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak
   signalData tmpData;
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
-    float prob = freqPointer->probability();
+    //float prob = freqPointer->probability();
     float peak = peakPointer->read();
     tmpData.freq = note;
     tmpData.peak = peak;
     // debugging/testing
-    int peakProb = peak * 100.0;
-    //Serial.printf("Note: %3.2f | Probability: %.2f | Peak: %d \n", note, prob, peak);
+    //int peakProb = peak * 100.0;
   } else {
     // wat do?
     tmpData.freq = 0.0;
@@ -145,10 +146,7 @@ signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak
 
 
 
-// TODO maybe a struct for holding current/last/timestamp/other data?
-// noteOn
-// lastMidiNote
-//
+// maybe investigate how to apply volume control/fade per active midi note, for decay
 
 // single string monitoring
 class SingleNoteTracker
@@ -156,27 +154,86 @@ class SingleNoteTracker
 public:
   // ring buffers.
   // array of previous amplitudes
+  bool noteIsOn = false;
+  bool turnNoteOff = false;
+  int currentNote = 0;
+  int newNote = 0;
+  int currentVel = 0;
+  int newVel = 0;
   RingBufCPP<int, peakRingBufferLength> velRingBuf;
   // array of previous midi notes
   RingBufCPP<int, noteRingBufferLength> noteRingBuf;
-  // keep track of current pitch/freq/note
-  RingBufCPP<float, noteRingBufferLength> freqRingBuf;
-  RingBufCPP<float, peakRingBufferLength> peakRingBuf;
+  // keep track of current pitch/freq/note?
+  //RingBufCPP<float, noteRingBufferLength> freqRingBuf;
+  //RingBufCPP<float, peakRingBufferLength> peakRingBuf;
   AudioAnalyzeNoteFrequency * freqPointer;
   AudioAnalyzePeak * peakPointer;
+
+
   // sample the channel and add to ring buf
-  void updateSignalData(void) {
-    signalData tmpData;
-    tmpData = signalCheck(freqPointer, peakPointer);
+  void updateSignalData() {
+    signalData tmpData = signalCheck(freqPointer, peakPointer);
     int midiNote = freqToMidiNote(tmpData.freq);
     int midiVel = peakToMidiVelocity(tmpData.peak);
-    freqRingBuf.add(tmpData.freq, true);
-    peakRingBuf.add(tmpData.peak, true);
+    //freqRingBuf.add(tmpData.freq, true);
+    //peakRingBuf.add(tmpData.peak, true);
     noteRingBuf.add(midiNote, true);
     velRingBuf.add(midiVel, true);
   }
+
+
   // TODO funcs for comparing last data vs moving average in note buffer
-  bool noteIsOn;
+  // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
+  bool noteHasChanged() {
+    //int bufLen = noteRingBuf.numElements();
+    int average;
+    for (int i=0; i<noteRingBuf.numElements(); i++) {
+      average += *noteRingBuf.peek(i);
+    }
+    average = average / noteRingBuf.numElements();
+    if (average != currentNote) {
+      newNote = average;
+      turnNoteOff = true;
+      return(true);
+    } else {
+      return(false);
+    }
+  }
+
+
+  // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
+  bool amplitudeJump() {
+    int average;
+    for (int i=0; i<velRingBuf.numElements(); i++) {
+      average += *velRingBuf.peek(i);
+    }
+    average = average / velRingBuf.numElements();
+    if (average != currentVel) {
+      newVel = average;
+      turnNoteOff = true;
+      return(true);
+    } else {
+      return(false);
+    }
+  }
+
+
+  // if the note's amplitude has fallen below X threshold, turn note off
+  bool belowAmplitudeThreshold() {
+    int average;
+    for (int i=0; i<velRingBuf.numElements(); i++) {
+      average += *velRingBuf.peek(i);
+    }
+    average = average / velRingBuf.numElements();
+    if (average <= midiMinimumVelocityThreshold) {
+      newVel = average;
+      turnNoteOff = true;
+      return(true);
+    } else {
+      return(false);
+    }
+  }
+
 private:
   // things
 };
