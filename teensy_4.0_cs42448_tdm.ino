@@ -73,14 +73,19 @@ AudioControlCS42448      cs42448_1;
 // TODO, WIP
 //
 
+
+
+
 //
 //
-// okay so, general idea here is to take audio data from a guitar
-// or bass, and turn that in to base frequency and amplitude data.
-// that data will then be analyzed / possibly modulated, and afterward
-// get translated into midi data.
+// okay so, general idea here is to take audio data from a guitar or bass.
+// each string has it's own isolated pickup
+// then turn the data from each individual string in to the base frequency and amplitude data.
+// that data will then be analyzed / possibly modulated, and afterward,
+// get translated into midi data, and sent over USB to whatever is powering the thing.
 //
-// 
+//  win.
+
 
 
 
@@ -130,7 +135,13 @@ private:
 };
 
 
+
+
+
 // below here mostly works
+
+
+
 
 
 // thanks, https://newt.phys.unsw.edu.au/jw/notes.html
