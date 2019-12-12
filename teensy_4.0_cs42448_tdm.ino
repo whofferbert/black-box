@@ -12,14 +12,6 @@
 #include "RingBufCPP.h"
 #include <vector>
 
-// bits of data to pass
-struct signalData {float freq, peak;};
-struct midiData {int note, velocity;};
-
-// note frequency confidence factor
-// 0.15 = default. 0.11 = scrutiny
-const float confidenceThreshold = 0.11;
-
 // midi channel selection
 // is this 0 or 1 based?
 const int midiChannel = 1;
@@ -30,6 +22,10 @@ const int midiChannel = 1;
 const int noteRingBufferLength = 8;
 const int peakRingBufferLength = 8;
 const int midiMinimumVelocityThreshold = 5;
+
+// note frequency confidence factor
+// 0.15 = default. 0.11 = scrutiny
+const float confidenceThreshold = 0.11;
 
 // GUItool: begin automatically generated code
 AudioInputTDM            tdm1;           //xy=256.75,414.75
@@ -85,8 +81,6 @@ std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6}
 //
 
 
-
-
 //
 //
 // okay so, general idea here is to take audio data from a guitar or bass.
@@ -98,6 +92,9 @@ std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6}
 //  win.
 
 
+// bits of data to pass
+struct signalData {float freq, peak;};
+struct midiData {int note, velocity;};
 
 // thanks, https://newt.phys.unsw.edu.au/jw/notes.html
 int freqToMidiNote(float freq) {
@@ -255,6 +252,7 @@ std::vector<SingleNoteTracker> strings = {string1, string2, string3, string4, st
 void setup() {
   // debug/testing
   Serial.begin(9600);
+
   // loooots of audio memory; thank you, teensy 4
   AudioMemory(512);
   cs42448_1.enable();
@@ -265,8 +263,7 @@ void setup() {
     freq.begin(confidenceThreshold);
   }
 
-  // setup note buffers...
-  //  
+  // setup string pointers... there must be a better way to handle this
   string1.freqPointer = &notefreq1; 
   string1.peakPointer = &peak1; 
   string2.freqPointer = &notefreq2; 
