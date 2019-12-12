@@ -193,22 +193,6 @@ std::vector<SingleNoteTracker> strings = {string1, string2, string3, string4, st
 
 // below here mostly works
 
-
-
-void stringSignalToMidi() {
-  // stuff
-}
-
-void updateAllStringData() {
-  string1.updateSignalData();
-  string2.updateSignalData();
-  string3.updateSignalData();
-  string4.updateSignalData();
-  string5.updateSignalData();
-  string6.updateSignalData();
-}
-
-
 void setup() {
   // debug/testing
   Serial.begin(9600);
@@ -246,12 +230,8 @@ void loop() {
 
   for(SingleNoteTracker string : strings) {
     string.updateSignalData();
+    //string.stringSignalToMidi();
   }
-
-  //updateAllStringData();
-
-  // update notes/send midi notes.
-  stringSignalToMidi();
 
   while (usbMIDI.read()) {
     // ignore incoming messages, don't proliferate bugs
