@@ -12,6 +12,10 @@
 #include "RingBufCPP.h"
 #include <vector>
 
+// bits of data to pass
+struct signalData {float freq, peak;};
+struct midiData {int note, velocity;};
+
 // note frequency confidence factor
 // 0.15 = default. 0.11 = scrutiny
 const float confidenceThreshold = 0.11;
@@ -91,68 +95,6 @@ AudioControlCS42448      cs42448_1;
 
 
 
-
-
-// TODO
-// there should be a thing in charge of midi note tracking... 
-// like turning off old notes before moving on to new ones.
-// how to manage a single stream of notes in a modular way ; apply that x6
-// 
-
-class NoteManager
-{
-public:
-  // create a vector of note tracker objects
-  std::vector<SingleNoteTracker> Strings;
-  // if there's a new note (reliably), turn old note off, new note on
-  // if the amplitude jumps (threshold diff up) back up but for the same note,
-  //   turn old note off and back on.
-  // if the note's amplitude has fallen below X threshold, turn note off
-  // maybe investigate how to apply volume control/fade per active midi note, for decay
-  
-private:
-};
-
-
-
-// TODO
-// we need some collection of logic to keep track of the most recent frequency and pitch
-// data for a single (monophonic) source. 
-// this should probably be a ring buffer or something
-// and a set of moving averages?
-// other fields for status? 
-// freq rising, lowering, static, etc?
-// 
-
-// single string monitoring
-class SingleNoteTracker
-{
-public:
-  // ring buffers.
-  // array of previous amplitudes
-  RingBufCPP<float, peakRingBufferLength> peakRingBuf;
-  // array of previous midi notes
-  RingBufCPP<float, noteRingBufferLength> noteRingBuf;
-  // keep track of current pitch/freq/note
-  float currentNote;
-  float currentPeak
-  int midiNote;
-  int midiVelocity;
-  bool noteIsOn;
-private:
-  // things
-};
-
-
-
-
-
-// below here mostly works
-
-
-
-
-
 // thanks, https://newt.phys.unsw.edu.au/jw/notes.html
 int freqToMidiNote(float freq) {
   // 12 notes per scale, log base 2 (freq / reference freq) + ref freq midi number
@@ -160,46 +102,111 @@ int freqToMidiNote(float freq) {
   return( int( roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0 ) );
 }
 
+int peakToMidiVelocity(float peak) {
+  // convert float to 0-99 scale
+  return(int(peak * 100.0));
+}
+
 void sendNoteOn(int note, int velocity) {
   // TODO option for always full velocity?
   // TODO velocity mod?
   //usbMIDI.sendNoteOn(60, 99, midiChannel);  // 60 = C4
-  usbMIDI.sendNoteOn(note, velocity, midiChannel);
+  Serial.printf("Would have sent note %s ON, vel %s\n", note, velocity);
+  //usbMIDI.sendNoteOn(note, velocity, midiChannel);
 }
 
 void sendNoteOff(int note) {
   //usbMIDI.sendNoteOff(60, 0, midiChannel);  // 60 = C4
-  usbMIDI.sendNoteOff(note, 0, midiChannel);
+  Serial.printf("Would have sent note %s OFF\n", note);
+  //usbMIDI.sendNoteOff(note, 0, midiChannel);
 }
 
 // loop tasks for frequency/peak stuff.
-// this should be made better
-// instead of serial.printing things, it should send peak/freq data to
-// the note manager object
-// TODO should probably return a frequency and peak value
-void signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer) {
+signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer) {
+  signalData tmpData;
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float prob = freqPointer->probability();
     float peak = peakPointer->read();
+    tmpData.freq = note;
+    tmpData.peak = peak;
     // debugging/testing
     int peakProb = peak * 100.0;
-    Serial.printf("Note: %3.2f | Probability: %.2f | Peak: %d \n", note, prob, peak);
+    //Serial.printf("Note: %3.2f | Probability: %.2f | Peak: %d \n", note, prob, peak);
+  } else {
+    // wat do?
+    tmpData.freq = 0.0;
+    tmpData.peak = 0.0;
   }
+  return(tmpData);
 }
 
 
-// TODO these should output some a tuple of floats or something
-// and then pass that to an updater program
-void freqAndPeak() {
-  signalCheck(&notefreq1, &peak1);
-  signalCheck(&notefreq2, &peak2);
-  signalCheck(&notefreq3, &peak3);
-  signalCheck(&notefreq4, &peak4);
-  signalCheck(&notefreq5, &peak5);
-  signalCheck(&notefreq6, &peak6);
+
+// TODO maybe a struct for holding current/last/timestamp/other data?
+
+// single string monitoring
+class SingleNoteTracker
+{
+public:
+  // ring buffers.
+  // array of previous amplitudes
+  RingBufCPP<int, peakRingBufferLength> velRingBuf;
+  // array of previous midi notes
+  RingBufCPP<int, noteRingBufferLength> noteRingBuf;
+  // keep track of current pitch/freq/note
+  RingBufCPP<float, noteRingBufferLength> freqRingBuf;
+  RingBufCPP<float, peakRingBufferLength> peakRingBuf;
+  float currentNote;
+  float currentPeak;
+  AudioAnalyzeNoteFrequency * freqPointer;
+  AudioAnalyzePeak * peakPointer;
+  int midiNote;
+  int midiVelocity;
+  bool noteIsOn;
+  // sample the channel and add to ring buf
+  void updateSignalData(void) {
+    signalData tmpData;
+    tmpData = signalCheck(freqPointer, peakPointer);
+    int midiNote = freqToMidiNote(tmpData.freq);
+    int midiVel = peakToMidiVelocity(tmpData.peak);
+    this->freqRingBuf.add(tmpData.freq, true);
+    this->peakRingBuf.add(tmpData.peak, true);
+    this->noteRingBuf.add(midiNote, true);
+    this->velRingBuf.add(midiVel, true);
+  }
+private:
+  // things
+};
+
+
+SingleNoteTracker string1;
+SingleNoteTracker string2;
+SingleNoteTracker string3;
+SingleNoteTracker string4;
+SingleNoteTracker string5;
+SingleNoteTracker string6;
+
+//vector for stringsNoteTrackers
+std::vector<SingleNoteTracker> strings = {string1, string2, string3, string4, string5, string6};
+
+
+// below here mostly works
+
+
+
+void stringSignalToMidi() {
+  // stuff
 }
 
+void updateAllStringData() {
+  string1.updateSignalData();
+  string2.updateSignalData();
+  string3.updateSignalData();
+  string4.updateSignalData();
+  string5.updateSignalData();
+  string6.updateSignalData();
+}
 
 
 void setup() {
@@ -217,18 +224,34 @@ void setup() {
   notefreq4.begin(confidenceThreshold);
   notefreq5.begin(confidenceThreshold);
   notefreq6.begin(confidenceThreshold);
+
+  string1.freqPointer = &notefreq1; 
+  string1.peakPointer = &peak1; 
+  string2.freqPointer = &notefreq2; 
+  string2.peakPointer = &peak2; 
+  string3.freqPointer = &notefreq3; 
+  string3.peakPointer = &peak3; 
+  string4.freqPointer = &notefreq4; 
+  string4.peakPointer = &peak4; 
+  string5.freqPointer = &notefreq5; 
+  string5.peakPointer = &peak5; 
+  string6.freqPointer = &notefreq6; 
+  string6.peakPointer = &peak6; 
 }
 
 
-// for best effect with freqAndNote, make your terminal/monitor 
-// a minimum of 62 chars wide, and as tall as you can.
 void loop() {
   // audio interaction
-  freqAndPeak();
+  // update strings signal data
 
-  // TODO update something here with freqAndNote data.
-  // mmmmmmmmmmmmmm
-  // send midi notes.
+  for(SingleNoteTracker string : strings) {
+    string.updateSignalData();
+  }
+
+  //updateAllStringData();
+
+  // update notes/send midi notes.
+  stringSignalToMidi();
 
   while (usbMIDI.read()) {
     // ignore incoming messages, don't proliferate bugs
