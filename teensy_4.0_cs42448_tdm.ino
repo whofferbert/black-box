@@ -26,8 +26,8 @@ const int midiChannel = 1;
 
 // midi note/peak buffer lengths.
 // note: must be multiple of 2!
-const int noteRingBufferLength = 16;
-const int peakRingBufferLength = 16;
+const int noteRingBufferLength = 8;
+const int peakRingBufferLength = 8;
 
 // GUItool: begin automatically generated code
 AudioInputTDM            tdm1;           //xy=256.75,414.75
@@ -76,6 +76,8 @@ AudioConnection          patchCord27(mixer1, 0, mixer2, 2);
 AudioControlCS42448      cs42448_1;
 // GUItool: end automatically generated code
 
+std::vector<AudioAnalyzeNoteFrequency> freqs = {notefreq1, notefreq2, notefreq3, notefreq4, notefreq5, notefreq6};
+std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6};
 //
 // TODO, WIP
 //
@@ -144,6 +146,9 @@ signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak
 
 
 // TODO maybe a struct for holding current/last/timestamp/other data?
+// noteOn
+// lastMidiNote
+//
 
 // single string monitoring
 class SingleNoteTracker
@@ -157,24 +162,21 @@ public:
   // keep track of current pitch/freq/note
   RingBufCPP<float, noteRingBufferLength> freqRingBuf;
   RingBufCPP<float, peakRingBufferLength> peakRingBuf;
-  float currentNote;
-  float currentPeak;
   AudioAnalyzeNoteFrequency * freqPointer;
   AudioAnalyzePeak * peakPointer;
-  int midiNote;
-  int midiVelocity;
-  bool noteIsOn;
   // sample the channel and add to ring buf
   void updateSignalData(void) {
     signalData tmpData;
     tmpData = signalCheck(freqPointer, peakPointer);
     int midiNote = freqToMidiNote(tmpData.freq);
     int midiVel = peakToMidiVelocity(tmpData.peak);
-    this->freqRingBuf.add(tmpData.freq, true);
-    this->peakRingBuf.add(tmpData.peak, true);
-    this->noteRingBuf.add(midiNote, true);
-    this->velRingBuf.add(midiVel, true);
+    freqRingBuf.add(tmpData.freq, true);
+    peakRingBuf.add(tmpData.peak, true);
+    noteRingBuf.add(midiNote, true);
+    velRingBuf.add(midiVel, true);
   }
+  // TODO funcs for comparing last data vs moving average in note buffer
+  bool noteIsOn;
 private:
   // things
 };
@@ -200,15 +202,14 @@ void setup() {
   AudioMemory(512);
   cs42448_1.enable();
   cs42448_1.volume(1.0);
+
+  // start frequency monitors
+  for( AudioAnalyzeNoteFrequency freq : freqs) {
+    freq.begin(confidenceThreshold);
+  }
+
   // setup note buffers...
   //  
-  notefreq1.begin(confidenceThreshold);
-  notefreq2.begin(confidenceThreshold);
-  notefreq3.begin(confidenceThreshold);
-  notefreq4.begin(confidenceThreshold);
-  notefreq5.begin(confidenceThreshold);
-  notefreq6.begin(confidenceThreshold);
-
   string1.freqPointer = &notefreq1; 
   string1.peakPointer = &peak1; 
   string2.freqPointer = &notefreq2; 
