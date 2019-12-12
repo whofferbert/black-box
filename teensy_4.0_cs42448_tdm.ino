@@ -11,9 +11,11 @@
 #include <math.h>
 
 // note frequency confidence factor
+// 0.15 = default. 0.11 = scrutiny
 const float confidenceThreshold = 0.11;
 
 // midi channel selection
+// is this 0 or 1 based?
 const int midiChannel = 1;
 
 // midi note/peak tracking stuff
@@ -156,44 +158,14 @@ void sendNoteOff(int note) {
 // the note manager object
 // TODO should probably return a frequency and peak value
 void freqCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer) {
-  bool printed = false;  
-  // TODO redo this? if freq and peak available?
-  if (freqPointer->available()) {
+  if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float prob = freqPointer->probability();
-    Serial.printf("Note: %3.2f | Probability: %.2f ----- ", note, prob);
-    printed = true;
+    float peak = peakPointer->read();
+    // debugging/testing
+    int peakProb = peak * 100.0;
+    Serial.printf("Note: %3.2f | Probability: %.2f | Peak: %d \n", note, prob, peak);
   }
-
-  if (printed == true) {
-    Serial.println("");
-  }
-
-  if (peakPointer->available() && printed == true) {
-    float leftNumber = peakPointer->read();
-    float rightNumber = leftNumber;
-    int leftPeak = leftNumber * 30.0;
-    int rightPeak = rightNumber * 30.0;
-    int count;
-    for (count=0; count < 30-leftPeak; count++) {
-      Serial.print(" ");
-    }
-    while (count++ < 30) {
-      Serial.print("<");
-    }
-    Serial.print("||");
-    for (count=0; count < rightPeak; count++) {
-      Serial.print(">");
-    }
-    while (count++ < 30) {
-      Serial.print(" ");
-    }
-    Serial.print(leftNumber);
-    Serial.print(", ");
-    Serial.print(rightNumber);
-    Serial.println();
-  }
-  
 }
 
 void freqAndNote() {
@@ -208,7 +180,9 @@ void freqAndNote() {
 
 
 void setup() {
+  // debug/testing
   Serial.begin(9600);
+  // loooots of audio memory; thank you, teensy 4
   AudioMemory(512);
   cs42448_1.enable();
   cs42448_1.volume(1.0);
@@ -227,15 +201,14 @@ void setup() {
 // a minimum of 62 chars wide, and as tall as you can.
 void loop() {
   // audio interaction
-  // TODO should there be a more main kind of function here?
-  // possibly something with a time counter/delay thingy?
   freqAndNote();
 
-  // update something here with freqAndNote data.
+  // TODO update something here with freqAndNote data.
+  // mmmmmmmmmmmmmm
   // send midi notes.
 
   while (usbMIDI.read()) {
-    // ignore incoming messages
+    // ignore incoming messages, don't proliferate bugs
   }
 
 }
