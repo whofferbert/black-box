@@ -1,0 +1,20 @@
+For some reason, with arduino-1.8.10 and teensyduino 1.49 beta 2, the thing failed to compile.
+To fix this, i had to add variables to some .c source:
+
+Variables added:
+
+----
+#define CDC_RX_SIZE_480       512
+#define CDC_RX_SIZE_12        64
+#define CDC_TX_SIZE_480       512
+#define CDC_TX_SIZE_12        64
+----
+
+The files variables were added to:
+
+----
+arduino-1.8.10/hardware/teensy/avr/cores/teensy4/usb_serial.c
+arduino-1.8.10/hardware/teensy/avr/cores/teensy4/usb_desc.c
+----
+
+The variables were defined in usb_desc.h but were not picked up properly for some reason
