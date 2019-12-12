@@ -9,6 +9,8 @@
 #include <SD.h>
 #include <SerialFlash.h>
 #include <math.h>
+#include "RingBufCPP.h"
+#include <vector>
 
 // note frequency confidence factor
 // 0.15 = default. 0.11 = scrutiny
@@ -18,9 +20,10 @@ const float confidenceThreshold = 0.11;
 // is this 0 or 1 based?
 const int midiChannel = 1;
 
-// midi note/peak tracking stuff
-const int midiNoteBufferLength = 10;
-const int midiPeakBufferLength = 10;
+// midi note/peak buffer lengths.
+// note: must be multiple of 2!
+const int noteRingBufferLength = 16;
+const int peakRingBufferLength = 16;
 
 // GUItool: begin automatically generated code
 AudioInputTDM            tdm1;           //xy=256.75,414.75
@@ -98,10 +101,9 @@ AudioControlCS42448      cs42448_1;
 
 class NoteManager
 {
-//const int midiNoteBufferLength = 10;
-//const int midiPeakBufferLength = 10;
 public:
   // create a vector of note tracker objects
+  std::vector<SingleNoteTracker> Strings;
   // if there's a new note (reliably), turn old note off, new note on
   // if the amplitude jumps (threshold diff up) back up but for the same note,
   //   turn old note off and back on.
@@ -110,6 +112,8 @@ public:
   
 private:
 };
+
+
 
 // TODO
 // we need some collection of logic to keep track of the most recent frequency and pitch
@@ -120,16 +124,21 @@ private:
 // freq rising, lowering, static, etc?
 // 
 
+// single string monitoring
 class SingleNoteTracker
 {
 public:
-  // single string monitoring
+  // ring buffers.
   // array of previous amplitudes
-    // 
+  RingBufCPP<float, peakRingBufferLength> peakRingBuf;
   // array of previous midi notes
-  //  
+  RingBufCPP<float, noteRingBufferLength> noteRingBuf;
   // keep track of current pitch/freq/note
-  // keep track of current amplitude
+  float currentNote;
+  float currentPeak
+  int midiNote;
+  int midiVelocity;
+  bool noteIsOn;
 private:
   // things
 };
@@ -168,7 +177,7 @@ void sendNoteOff(int note) {
 // instead of serial.printing things, it should send peak/freq data to
 // the note manager object
 // TODO should probably return a frequency and peak value
-void freqCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer) {
+void signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer) {
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float prob = freqPointer->probability();
@@ -179,13 +188,16 @@ void freqCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakP
   }
 }
 
-void freqAndNote() {
-  freqCheck(&notefreq1, &peak1);
-  freqCheck(&notefreq2, &peak2);
-  freqCheck(&notefreq3, &peak3);
-  freqCheck(&notefreq4, &peak4);
-  freqCheck(&notefreq5, &peak5);
-  freqCheck(&notefreq6, &peak6);
+
+// TODO these should output some a tuple of floats or something
+// and then pass that to an updater program
+void freqAndPeak() {
+  signalCheck(&notefreq1, &peak1);
+  signalCheck(&notefreq2, &peak2);
+  signalCheck(&notefreq3, &peak3);
+  signalCheck(&notefreq4, &peak4);
+  signalCheck(&notefreq5, &peak5);
+  signalCheck(&notefreq6, &peak6);
 }
 
 
@@ -212,7 +224,7 @@ void setup() {
 // a minimum of 62 chars wide, and as tall as you can.
 void loop() {
   // audio interaction
-  freqAndNote();
+  freqAndPeak();
 
   // TODO update something here with freqAndNote data.
   // mmmmmmmmmmmmmm
