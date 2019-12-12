@@ -1,5 +1,7 @@
 // testing grounds!
-// Audio includes
+// WIP
+// here be dragons
+// and whofferbert hacks
 
 #include <Audio.h>
 #include <Wire.h>
@@ -65,15 +67,23 @@ AudioConnection          patchCord27(mixer1, 0, mixer2, 2);
 AudioControlCS42448      cs42448_1;
 // GUItool: end automatically generated code
 
+//
+// TODO, WIP
+//
 
+//
 //
 // okay so, general idea here is to take audio data from a guitar
 // or bass, and turn that in to base frequency and amplitude data.
 // that data will then be analyzed / possibly modulated, and afterward
 // get translated into midi data.
+//
 // 
 
-//
+
+
+
+// TODO
 // there should be a thing in charge of midi note tracking... 
 // like turning off old notes before moving on to new ones.
 // how to manage a single stream of notes in a modular way ; apply that x6
@@ -84,18 +94,23 @@ class NoteManager
 //const int midiNoteBufferLength = 10;
 //const int midiPeakBufferLength = 10;
 public:
-  // create a vector of objects
-  // N by arrays 
-  //  // what arrays
-  // keep track of current pitch/freq/note
-  // keep track of current amplitude
-  // if there's a new note, turn note off
-  // if the amplitude jumps back up but for the same note, turn note off and back on
+  // create a vector of note tracker objects
+  // if there's a new note (reliably), turn old note off, new note on
+  // if the amplitude jumps (threshold diff up) back up but for the same note,
+  //   turn old note off and back on.
   // if the note's amplitude has fallen below X threshold, turn note off
-  // maybe fade volumes out?
+  // maybe investigate how to apply volume control/fade per active midi note, for decay
+  
 private:
-}
+};
 
+// TODO
+// we need some collection of logic to keep track of the most recent frequency and pitch
+// data for a single (monophonic) source. 
+// this should probably be a ring buffer or something
+// and a set of moving averages?
+// other fields for status? 
+// freq rising, lowering, static, etc?
 // 
 
 class SingleNoteTracker
@@ -103,22 +118,24 @@ class SingleNoteTracker
 public:
   // single string monitoring
   // array of previous amplitudes
+    // 
   // array of previous midi notes
-  // 
+  //  
+  // keep track of current pitch/freq/note
+  // keep track of current amplitude
 private:
   // things
-}
+};
 
 
+// below here mostly works
 
-// thanks https://newt.phys.unsw.edu.au/jw/notes.html
+
+// thanks, https://newt.phys.unsw.edu.au/jw/notes.html
 int freqToMidiNote(float freq) {
   // 12 notes per scale, log base 2 (freq / reference freq) + ref freq midi number
   // 12 * (f/440) + 69
-  float m = (12.0 * log2f(freq/440.0)) + 69.0;
-  //float round = roundf(m);
-  //return(int(round));
-  return(int(roundf(m)));
+  return( int( roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0 ) );
 }
 
 void sendNoteOn(int note, int velocity) {
