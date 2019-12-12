@@ -1,3 +1,5 @@
+================ 1 ===================
+
 For some reason, with arduino-1.8.10 and teensyduino 1.49 beta 2, the thing failed to compile.
 To fix this, i had to add variables to some .c source:
 
@@ -18,3 +20,18 @@ arduino-1.8.10/hardware/teensy/avr/cores/teensy4/usb_desc.c
 ----
 
 The variables were defined in usb_desc.h but were not picked up properly for some reason
+
+
+================ 2 ===================
+
+had to replace Arduino/libraries/RingBufCPP/RingBufCPP.h with a newer version of RingBufCPP.h from git.
+
+
+================ 3 ===================
+reserved
+================ 4 ===================
+reserved
+================ 5 ===================
+reserved
+================ 6 ===================
+reserved
