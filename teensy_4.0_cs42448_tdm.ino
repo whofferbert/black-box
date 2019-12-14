@@ -21,7 +21,9 @@ const int midiChannel = 1;
 // maybe make this 16? 24?
 const int noteRingBufferLength = 8;
 const int peakRingBufferLength = 8;
-const int midiMinimumVelocityThreshold = 5;
+
+// when to turn off notes because they fade out. 5 is arbitrary. 
+const int midiMinimumVelocityThreshold = 1;
 
 // note frequency confidence factor
 // 0.15 = default. 0.11 = scrutiny
@@ -123,7 +125,7 @@ void sendNoteOff(int note) {
 }
 
 // loop tasks for frequency/peak stuff.
-signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer) {
+signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer, float lastFreq, float lastPeak) {
   signalData tmpData;
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
@@ -134,9 +136,8 @@ signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak
     // debugging/testing
     //int peakProb = peak * 100.0;
   } else {
-    // wat do?
-    tmpData.freq = 0.0;
-    tmpData.peak = 0.0;
+    tmpData.freq = lastFreq;
+    tmpData.peak = lastPeak;
   }
   return(tmpData);
 }
@@ -144,6 +145,7 @@ signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak
 
 
 // maybe investigate how to apply volume control/fade per active midi note, for decay
+// TODO this class is out of hand. perhaps should be in another .cpp and .h file
 
 // single string monitoring
 class SingleNoteTracker
@@ -161,19 +163,20 @@ public:
   // array of previous midi notes
   RingBufCPP<int, noteRingBufferLength> noteRingBuf;
   // keep track of current pitch/freq/note?
-  //RingBufCPP<float, noteRingBufferLength> freqRingBuf;
-  //RingBufCPP<float, peakRingBufferLength> peakRingBuf;
+  RingBufCPP<float, noteRingBufferLength> freqRingBuf;
+  RingBufCPP<float, peakRingBufferLength> peakRingBuf;
   AudioAnalyzeNoteFrequency * freqPointer;
   AudioAnalyzePeak * peakPointer;
 
 
   // sample the channel and add to ring buf
   void updateSignalData() {
-    signalData tmpData = signalCheck(freqPointer, peakPointer);
+    signalData tmpData = signalCheck(freqPointer, peakPointer, 
+      *freqRingBuf.peek(freqRingBuf.numElements() - 1), *peakRingBuf.peek(peakRingBuf.numElements() - 1));
     int midiNote = freqToMidiNote(tmpData.freq);
     int midiVel = peakToMidiVelocity(tmpData.peak);
-    //freqRingBuf.add(tmpData.freq, true);
-    //peakRingBuf.add(tmpData.peak, true);
+    freqRingBuf.add(tmpData.freq, true);
+    peakRingBuf.add(tmpData.peak, true);
     noteRingBuf.add(midiNote, true);
     velRingBuf.add(midiVel, true);
   }
@@ -183,14 +186,14 @@ public:
   // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
   bool noteHasChanged() {
     //int bufLen = noteRingBuf.numElements();
-    int average;
+    int total;
+    // 
     for (int i=0; i<noteRingBuf.numElements(); i++) {
-      average += *noteRingBuf.peek(i);
+      total += *noteRingBuf.peek(i);
     }
-    average = average / noteRingBuf.numElements();
+    int average = roundf(float(total) / float(noteRingBuf.numElements()));
     if (average != currentNote) {
       newNote = average;
-      turnNoteOff = true;
       return(true);
     } else {
       return(false);
@@ -198,44 +201,74 @@ public:
   }
 
 
-  // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
-  bool amplitudeJump() {
-    int average;
+  bool amplitudeChanged() {
+    bool changed = false;
+    int total;
     for (int i=0; i<velRingBuf.numElements(); i++) {
-      average += *velRingBuf.peek(i);
+      total += *velRingBuf.peek(i);
     }
-    average = average / velRingBuf.numElements();
-    if (average != currentVel) {
+    // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
+    int average = roundf(float(total) / float(velRingBuf.numElements()));
+    // TODO if amplitude jumps more than (percent? something?)
+    if (average > currentVel) {
+      newVel = average;
+      changed = true;
+    } else if (average <= midiMinimumVelocityThreshold) {
       newVel = average;
       turnNoteOff = true;
-      return(true);
-    } else {
-      return(false);
+      changed = true;
     }
+
+    return(changed);
   }
 
-
-  // if the note's amplitude has fallen below X threshold, turn note off
-  bool belowAmplitudeThreshold() {
-    int average;
-    for (int i=0; i<velRingBuf.numElements(); i++) {
-      average += *velRingBuf.peek(i);
+  bool hasAnythingChanged() {
+    bool changed = false;
+    if (noteHasChanged() || amplitudeChanged()) {
+      changed = true;
     }
-    average = average / velRingBuf.numElements();
-    if (average <= midiMinimumVelocityThreshold) {
-      newVel = average;
-      turnNoteOff = true;
-      return(true);
-    } else {
-      return(false);
-    }
+    return(changed);
   }
 
-private:
-  // things
+  void stringSignalToMidi() {
+    // TODO based on things, turn off/on notes
+    // TODO this might need to be different, like run every check func first, THEN step through note changes
+    // handle turning notes off...
+    bool noteWasTurnedOff = false;
+    if (newVel > currentVel || newNote != currentNote || turnNoteOff == true) {
+      // turn note off first
+      sendNoteOff(currentNote);
+      // mark that the note has been turned off
+      noteIsOn = false;
+      // mark that this fired?
+      noteWasTurnedOff = true;
+    }
+
+    bool noteWasChanged = false;
+    if (newNote != currentNote && noteIsOn == false) {
+      // TODO an override for max velocity every time?
+      // TODO sane to use newVel here?
+      sendNoteOn(newNote, newVel);
+      noteIsOn = true;
+      noteWasChanged = true;
+    } else if (newVel > currentVel && noteIsOn == false) {
+      sendNoteOn(currentNote, newVel);
+      noteIsOn = true;
+      noteWasChanged = true;
+    }
+
+    // mmmmm
+    if ( newNote != currentNote) {
+      currentNote = newNote;
+    }
+    if ( newVel != currentVel) {
+      currentVel = newVel;
+    }
+
+  }
 };
 
-
+// more global vars for the string trackers...
 SingleNoteTracker string1;
 SingleNoteTracker string2;
 SingleNoteTracker string3;
@@ -253,43 +286,61 @@ void setup() {
   // debug/testing
   Serial.begin(9600);
 
+  delay(1000);
+  Serial.println("got past serial begin");
+  delay(1000);
+
   // loooots of audio memory; thank you, teensy 4
   AudioMemory(512);
   cs42448_1.enable();
   cs42448_1.volume(1.0);
+  cs42448_1.inputLevel(4.0);
+
+  delay(1000);
+  Serial.println("got past audio chip setup");
+  delay(1000);
 
   // start frequency monitors
   for( AudioAnalyzeNoteFrequency freq : freqs) {
     freq.begin(confidenceThreshold);
   }
 
-  // setup string pointers... there must be a better way to handle this
-  string1.freqPointer = &notefreq1; 
-  string1.peakPointer = &peak1; 
-  string2.freqPointer = &notefreq2; 
-  string2.peakPointer = &peak2; 
-  string3.freqPointer = &notefreq3; 
-  string3.peakPointer = &peak3; 
-  string4.freqPointer = &notefreq4; 
-  string4.peakPointer = &peak4; 
-  string5.freqPointer = &notefreq5; 
-  string5.peakPointer = &peak5; 
-  string6.freqPointer = &notefreq6; 
-  string6.peakPointer = &peak6; 
+  delay(1000);
+  Serial.println("got past frequency config");
+  delay(1000);
+
+  // setup string pointers... 
+  int stringStepper = 0;
+  for(SingleNoteTracker string : strings) {
+    string.freqRingBuf.add(0.0);
+    string.peakRingBuf.add(0.0);
+    string.velRingBuf.add(0);
+    string.noteRingBuf.add(0);
+    string.freqPointer = &freqs[stringStepper]; 
+    string.peakPointer = &peaks[stringStepper];
+    stringStepper++;
+  }
+
+  delay(1000);
+  Serial.println("got past string setup");
+  delay(1000);
 }
 
 
 void loop() {
   // audio interaction
   // update strings signal data
-
   for(SingleNoteTracker string : strings) {
     string.updateSignalData();
-    //string.stringSignalToMidi();
+    //if (string.hasAnythingChanged()) {
+      // manage midi notes
+      string.stringSignalToMidi();
+    //}
   }
 
-  while (usbMIDI.read()) {
+  //commented for testing no midi connection yet
+  //while (usbMIDI.read()) {
     // ignore incoming messages, don't proliferate bugs
-  }
+  //}
 
 }
