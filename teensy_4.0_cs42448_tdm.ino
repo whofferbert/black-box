@@ -9,8 +9,9 @@
 #include <SD.h>
 #include <SerialFlash.h>
 #include <math.h>
-#include "RingBufCPP.h"
 #include <vector>
+// https://github.com/wizard97/Embedded_RingBuf_CPP
+#include "RingBufCPP.h"
 
 // midi channel selection
 // is this 0 or 1 based?
@@ -82,6 +83,50 @@ std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6}
 // TODO, WIP
 //
 
+// blinkenlights
+struct rgbPins {int r, g, b;} ;
+
+rgbPins led1 = {0, 1, 2};
+rgbPins led2 = {4, 5, 6};
+rgbPins led3 = {10, 11, 12};
+
+
+void rgbOn (rgbPins l) {
+  analogWrite(l.r, 0);
+  analogWrite(l.g, 0);
+  analogWrite(l.b, 0);
+}
+
+void rgbOff (rgbPins l) {
+  analogWrite(l.r, 255);
+  analogWrite(l.g, 255);
+  analogWrite(l.b, 255);
+}
+
+// These color values are based on Common Anode RGB LED's, not Cathode so LOW = 1, HIGH = 0
+void rgbOrange (rgbPins l) {
+  analogWrite(l.r, 0);
+  analogWrite(l.g, 175);
+  analogWrite(l.b, 255);
+}
+
+void rgbPurple (rgbPins l) {
+  analogWrite(l.r, 0);
+  analogWrite(l.g, 255);
+  analogWrite(l.b, 0);
+}
+
+void rgbYellow (rgbPins l) {
+  analogWrite(l.r, 0);
+  analogWrite(l.g, 75);
+  analogWrite(l.b, 255);
+}
+
+void rgbIn (rgbPins l, int r, int g, int b) {
+  analogWrite(l.r, r);
+  analogWrite(l.g, g);
+  analogWrite(l.b, b);
+}
 
 //
 //
@@ -124,24 +169,6 @@ void sendNoteOff(int note) {
   //usbMIDI.sendNoteOff(note, 0, midiChannel);
 }
 
-// loop tasks for frequency/peak stuff.
-signalData signalCheck(AudioAnalyzeNoteFrequency * freqPointer, AudioAnalyzePeak * peakPointer, float lastFreq, float lastPeak) {
-  signalData tmpData;
-  if (freqPointer->available() && peakPointer->available()) {
-    float note = freqPointer->read();
-    //float prob = freqPointer->probability();
-    float peak = peakPointer->read();
-    tmpData.freq = note;
-    tmpData.peak = peak;
-    // debugging/testing
-    //int peakProb = peak * 100.0;
-  } else {
-    tmpData.freq = lastFreq;
-    tmpData.peak = lastPeak;
-  }
-  return(tmpData);
-}
-
 
 
 // maybe investigate how to apply volume control/fade per active midi note, for decay
@@ -176,7 +203,6 @@ public:
   bool hasAnythingChanged();
   void stringSignalToMidi();
   void test();
-
 };
 
 void SingleNoteTracker::test() {
@@ -184,29 +210,48 @@ void SingleNoteTracker::test() {
 }
 
 // sample the channel and add to ring buf
+//
+//
+// TODO this is broken in general. requires more poking/understanding
+// can't seem to be able to add things to the ring buffers properly
+//
+// tried with and without 'this->' signifiers, i don't think they are needed
+// 
 void SingleNoteTracker::updateSignalData() {
-  // TODO broken
-  Serial.println("Got to start of func");
-  // 
-  // TODO this is broken...
-  // might try just moving the signal check logic into this func, since that's
-  // the only place it gets used
-  //signalData tmpData = signalCheck(freqPointer, peakPointer, 
-  //  *freqRingBuf.peek(freqRingBuf.numElements() - 1), *peakRingBuf.peek(peakRingBuf.numElements() - 1));
-  //signalData tmpData = {0.0, 69.0};
-  Serial.println("Got past tmpData setup");
+  int lastFreqIndex = this->freqRingBuf.numElements(); 
+  int lastPeakIndex = this->peakRingBuf.numElements();
+  Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
+  //float lastFreq = this->*freqRingBuf.peek(lastFreqIndex);
+  //float lastPeak = this->*peakRingBuf.peek(lastPeakIndex);
+  //float lastFreq = *freqRingBuf.peek(freqRingBuf.numElements() - 1);
+  float lastFreq = 0.0;
+  //float lastPeak = *peakRingBuf.peek(peakRingBuf.numElements() - 1);
+  float lastPeak = 0.0;
+  signalData tmpData;
+  if (this->freqPointer->available() && this->peakPointer->available()) {
+    Serial.println("Got a freq and peak available.");
+    float note = this->freqPointer->read();
+    //float prob = freqPointer->probability();
+    float peak = this->peakPointer->read();
+    tmpData.freq = note;
+    tmpData.peak = peak;
+    // debugging/testing
+    //int peakProb = peak * 100.0;
+  } else {
+    // TODO there's issues with this logic...
+    // like what happens when a signal goes away
+    // and the last signal we had was over the thresholds?
+    tmpData.freq = lastFreq;
+    tmpData.peak = lastPeak;
+  }
+  // TODO this never works, because we're never
+  // adding things to the ringbufs
   int midiNote = freqToMidiNote(tmpData.freq);
-  Serial.println("Got past freqToMidiNote");
   int midiVel = peakToMidiVelocity(tmpData.peak);
-  Serial.println("Got past peakToMidiVelocity");
-  freqRingBuf.add(tmpData.freq, true);
-  Serial.println("Got past freqRingBuf.add");
-  peakRingBuf.add(tmpData.peak, true);
-  Serial.println("Got past peakRingBuf.add");
-  noteRingBuf.add(midiNote, true);
-  Serial.println("Got past noteRingBuf.add");
-  velRingBuf.add(midiVel, true);
-  Serial.println("Got past velRingBuf.add");
+  this->freqRingBuf.add(tmpData.freq, true);
+  this->peakRingBuf.add(tmpData.peak, true);
+  this->noteRingBuf.add(midiNote, true);
+  this->velRingBuf.add(midiVel, true);
 }
 
 
@@ -310,16 +355,17 @@ SingleNoteTracker string6;
 std::vector<SingleNoteTracker> strings = {string1, string2, string3, string4, string5, string6};
 
 
+
+
 // below here mostly works
 
 void setup() {
-  //setup audio chip first, for as short a blip as possible
+  // setup audio chip first, for as short a blip as possible
   // loooots of audio memory; thank you, teensy 4
   AudioMemory(512);
   cs42448_1.enable();
   cs42448_1.volume(1.0);
-  //cs42448_1.inputLevel(4.0);
-  cs42448_1.inputLevel(2.0);
+  cs42448_1.inputLevel(3.0);
 
   // debug/testing
   Serial.begin(9600);
@@ -328,10 +374,27 @@ void setup() {
   Serial.println("got past audio chip init and serial begin");
   delay(1000);
 
+  // LEDs
+//  pinMode(0, OUTPUT);
+//  pinMode(1, OUTPUT);
+//  pinMode(2, OUTPUT);
+//  pinMode(4, OUTPUT);
+//  pinMode(5, OUTPUT);
+//  pinMode(6, OUTPUT);
+//  pinMode(10, OUTPUT);
+//  pinMode(11, OUTPUT);
+//  pinMode(12, OUTPUT);
+
   // start frequency monitors
-  for( AudioAnalyzeNoteFrequency freq : freqs) {
-    freq.begin(confidenceThreshold);
-  }
+  //for( AudioAnalyzeNoteFrequency freq : freqs) {
+  //  freq.begin(confidenceThreshold);
+  //}
+  notefreq1.begin(confidenceThreshold);
+  notefreq2.begin(confidenceThreshold);
+  notefreq3.begin(confidenceThreshold);
+  notefreq4.begin(confidenceThreshold);
+  notefreq5.begin(confidenceThreshold);
+  notefreq6.begin(confidenceThreshold);
 
   delay(1000);
   Serial.println("got past frequency config");
@@ -340,13 +403,12 @@ void setup() {
   // setup string pointers... 
   int stringStepper = 0;
   for(SingleNoteTracker string : strings) {
-    string.freqRingBuf.add(0.0);
-    string.peakRingBuf.add(0.0);
-    string.velRingBuf.add(0);
-    string.noteRingBuf.add(0);
+    string.freqRingBuf.add(0.0,true);
+    string.peakRingBuf.add(0.0,true);
+    string.velRingBuf.add(0,true);
+    string.noteRingBuf.add(0,true);
     string.freqPointer = &freqs[stringStepper]; 
     string.peakPointer = &peaks[stringStepper];
-    //string.name = sprintf("string%d", stringStepper);
     stringStepper++;
   }
 
@@ -362,17 +424,12 @@ void loop() {
   Serial.println("Got to start of loop");
   int stringNumber = 1;
   for(SingleNoteTracker string : strings) {
-    //Serial.println("Updating string %s", string.name)
     // this works...
-    Serial.printf("String: %d\tCurrent Note: %d\n", stringNumber, string.currentNote);
+    //Serial.printf("String: %d\tCurrent Note: %d\n", stringNumber, string.currentNote);
     // this works...
     //string.test();
     // TODO issues somewhere in below func...
-    // TODO so... for some reason, if this string.updateSignalData();
-    // gets included in this loop, LITERALLY nothing runs in the loop(); !
-    // mmmmmmmmm
     string.updateSignalData();
-    //(string.updateSignalData)();
     //if (string.hasAnythingChanged()) {
       // manage midi notes
       // string.stringSignalToMidi();
@@ -380,8 +437,16 @@ void loop() {
     stringNumber++;
   }
 
-  delay(10000);
+  Serial.println("left LED on:");
+
+  rgbOn(led1);
+
+  delay(5000);
   Serial.println("updated strings");
+
+  Serial.println("left LED off:");
+  rgbOff(led1);
+  delay(5000);
 
   //commented for testing no midi connection yet
   //while (usbMIDI.read()) {
