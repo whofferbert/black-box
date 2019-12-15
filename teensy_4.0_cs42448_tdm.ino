@@ -169,114 +169,134 @@ public:
   AudioAnalyzeNoteFrequency * freqPointer;
   AudioAnalyzePeak * peakPointer;
 
+  // member funcs;
+  void updateSignalData();
+  bool noteHasChanged();
+  bool amplitudeChanged();
+  bool hasAnythingChanged();
+  void stringSignalToMidi();
+  void test();
 
-  // sample the channel and add to ring buf
-  void updateSignalData() {
-    // TODO broken
-    Serial.println("Got to start of func");
-    signalData tmpData = signalCheck(freqPointer, peakPointer, 
-      *freqRingBuf.peek(freqRingBuf.numElements() - 1), *peakRingBuf.peek(peakRingBuf.numElements() - 1));
-    Serial.println("Got past tmpData setup");
-    int midiNote = freqToMidiNote(tmpData.freq);
-    Serial.println("Got past freqToMidiNote");
-    int midiVel = peakToMidiVelocity(tmpData.peak);
-    Serial.println("Got past peakToMidiVelocity");
-    freqRingBuf.add(tmpData.freq, true);
-    Serial.println("Got past freqRingBuf.add");
-    peakRingBuf.add(tmpData.peak, true);
-    Serial.println("Got past peakRingBuf.add");
-    noteRingBuf.add(midiNote, true);
-    Serial.println("Got past noteRingBuf.add");
-    velRingBuf.add(midiVel, true);
-    Serial.println("Got past velRingBuf.add");
-  }
-
-
-  // TODO funcs for comparing last data vs moving average in note buffer
-  // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
-  bool noteHasChanged() {
-    //int bufLen = noteRingBuf.numElements();
-    int total;
-    // 
-    for (int i=0; i<noteRingBuf.numElements(); i++) {
-      total += *noteRingBuf.peek(i);
-    }
-    int average = roundf(float(total) / float(noteRingBuf.numElements()));
-    if (average != currentNote) {
-      newNote = average;
-      return(true);
-    } else {
-      return(false);
-    }
-  }
-
-
-  bool amplitudeChanged() {
-    bool changed = false;
-    int total;
-    for (int i=0; i<velRingBuf.numElements(); i++) {
-      total += *velRingBuf.peek(i);
-    }
-    // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
-    int average = roundf(float(total) / float(velRingBuf.numElements()));
-    // TODO if amplitude jumps more than (percent? something?)
-    if (average > currentVel) {
-      newVel = average;
-      changed = true;
-    } else if (average <= midiMinimumVelocityThreshold) {
-      newVel = average;
-      turnNoteOff = true;
-      changed = true;
-    }
-
-    return(changed);
-  }
-
-  bool hasAnythingChanged() {
-    bool changed = false;
-    if (noteHasChanged() || amplitudeChanged()) {
-      changed = true;
-    }
-    return(changed);
-  }
-
-  void stringSignalToMidi() {
-    // TODO based on things, turn off/on notes
-    // TODO this might need to be different, like run every check func first, THEN step through note changes
-    // handle turning notes off...
-    bool noteWasTurnedOff = false;
-    if (newVel > currentVel || newNote != currentNote || turnNoteOff == true) {
-      // turn note off first
-      sendNoteOff(currentNote);
-      // mark that the note has been turned off
-      noteIsOn = false;
-      // mark that this fired?
-      noteWasTurnedOff = true;
-    }
-
-    bool noteWasChanged = false;
-    if (newNote != currentNote && noteIsOn == false) {
-      // TODO an override for max velocity every time?
-      // TODO sane to use newVel here?
-      sendNoteOn(newNote, newVel);
-      noteIsOn = true;
-      noteWasChanged = true;
-    } else if (newVel > currentVel && noteIsOn == false) {
-      sendNoteOn(currentNote, newVel);
-      noteIsOn = true;
-      noteWasChanged = true;
-    }
-
-    // mmmmm
-    if ( newNote != currentNote) {
-      currentNote = newNote;
-    }
-    if ( newVel != currentVel) {
-      currentVel = newVel;
-    }
-
-  }
 };
+
+void SingleNoteTracker::test() {
+  Serial.printf("Velocity: %d\tstuff\n", currentVel);
+}
+
+// sample the channel and add to ring buf
+void SingleNoteTracker::updateSignalData() {
+  // TODO broken
+  Serial.println("Got to start of func");
+  // 
+  // TODO this is broken...
+  // might try just moving the signal check logic into this func, since that's
+  // the only place it gets used
+  //signalData tmpData = signalCheck(freqPointer, peakPointer, 
+  //  *freqRingBuf.peek(freqRingBuf.numElements() - 1), *peakRingBuf.peek(peakRingBuf.numElements() - 1));
+  //signalData tmpData = {0.0, 69.0};
+  Serial.println("Got past tmpData setup");
+  int midiNote = freqToMidiNote(tmpData.freq);
+  Serial.println("Got past freqToMidiNote");
+  int midiVel = peakToMidiVelocity(tmpData.peak);
+  Serial.println("Got past peakToMidiVelocity");
+  freqRingBuf.add(tmpData.freq, true);
+  Serial.println("Got past freqRingBuf.add");
+  peakRingBuf.add(tmpData.peak, true);
+  Serial.println("Got past peakRingBuf.add");
+  noteRingBuf.add(midiNote, true);
+  Serial.println("Got past noteRingBuf.add");
+  velRingBuf.add(midiVel, true);
+  Serial.println("Got past velRingBuf.add");
+}
+
+
+// TODO funcs for comparing last data vs moving average in note buffer
+// if there's a new note (reliably), turn old note off, new note on... how to weight that properly
+bool SingleNoteTracker::noteHasChanged() {
+  //int bufLen = noteRingBuf.numElements();
+  int total;
+  // 
+  for (int i=0; i<noteRingBuf.numElements(); i++) {
+    total += *noteRingBuf.peek(i);
+  }
+  int average = roundf(float(total) / float(noteRingBuf.numElements()));
+  if (average != currentNote) {
+    newNote = average;
+    return(true);
+  } else {
+    return(false);
+  }
+}
+
+
+bool SingleNoteTracker::amplitudeChanged() {
+  bool changed = false;
+  int total;
+  for (int i=0; i<velRingBuf.numElements(); i++) {
+    total += *velRingBuf.peek(i);
+  }
+  // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
+  int average = roundf(float(total) / float(velRingBuf.numElements()));
+  // TODO if amplitude jumps more than (percent? something?)
+  if (average > currentVel) {
+    newVel = average;
+    changed = true;
+  } else if (average <= midiMinimumVelocityThreshold) {
+    newVel = average;
+    turnNoteOff = true;
+    changed = true;
+  }
+
+  return(changed);
+}
+
+
+bool SingleNoteTracker::hasAnythingChanged() {
+  bool changed = false;
+  if (noteHasChanged() || amplitudeChanged()) {
+    changed = true;
+  }
+  return(changed);
+}
+
+
+void SingleNoteTracker::stringSignalToMidi() {
+  // TODO based on things, turn off/on notes
+  // TODO this might need to be different, like run every check func first, THEN step through note changes
+  // handle turning notes off...
+  bool noteWasTurnedOff = false;
+  if (newVel > currentVel || newNote != currentNote || turnNoteOff == true) {
+    // turn note off first
+    sendNoteOff(currentNote);
+    // mark that the note has been turned off
+    noteIsOn = false;
+    // mark that this fired?
+    noteWasTurnedOff = true;
+  }
+
+  bool noteWasChanged = false;
+  if (newNote != currentNote && noteIsOn == false) {
+    // TODO an override for max velocity every time?
+    // TODO sane to use newVel here?
+    sendNoteOn(newNote, newVel);
+    noteIsOn = true;
+    noteWasChanged = true;
+  } else if (newVel > currentVel && noteIsOn == false) {
+    sendNoteOn(currentNote, newVel);
+    noteIsOn = true;
+    noteWasChanged = true;
+  }
+
+  // mmmmm
+  if ( newNote != currentNote) {
+    currentNote = newNote;
+  }
+  if ( newVel != currentVel) {
+    currentVel = newVel;
+  }
+
+}
+
 
 // more global vars for the string trackers...
 SingleNoteTracker string1;
@@ -293,13 +313,7 @@ std::vector<SingleNoteTracker> strings = {string1, string2, string3, string4, st
 // below here mostly works
 
 void setup() {
-  // debug/testing
-  Serial.begin(9600);
-
-  delay(1000);
-  Serial.println("got past serial begin");
-  delay(1000);
-
+  //setup audio chip first, for as short a blip as possible
   // loooots of audio memory; thank you, teensy 4
   AudioMemory(512);
   cs42448_1.enable();
@@ -307,8 +321,11 @@ void setup() {
   //cs42448_1.inputLevel(4.0);
   cs42448_1.inputLevel(2.0);
 
+  // debug/testing
+  Serial.begin(9600);
+
   delay(1000);
-  Serial.println("got past audio chip setup");
+  Serial.println("got past audio chip init and serial begin");
   delay(1000);
 
   // start frequency monitors
@@ -343,17 +360,24 @@ void loop() {
   // audio interaction
   // update strings signal data
   Serial.println("Got to start of loop");
+  int stringNumber = 1;
   for(SingleNoteTracker string : strings) {
     //Serial.println("Updating string %s", string.name)
-    Serial.println("Got into the SingleNoteTracker for loop");
+    // this works...
+    Serial.printf("String: %d\tCurrent Note: %d\n", stringNumber, string.currentNote);
+    // this works...
+    //string.test();
     // TODO issues somewhere in below func...
     // TODO so... for some reason, if this string.updateSignalData();
     // gets included in this loop, LITERALLY nothing runs in the loop(); !
-    //string.updateSignalData();
+    // mmmmmmmmm
+    string.updateSignalData();
+    //(string.updateSignalData)();
     //if (string.hasAnythingChanged()) {
       // manage midi notes
       // string.stringSignalToMidi();
     //}
+    stringNumber++;
   }
 
   delay(10000);
