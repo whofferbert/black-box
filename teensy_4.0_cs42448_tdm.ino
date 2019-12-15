@@ -153,6 +153,7 @@ class SingleNoteTracker
 public:
   // ring buffers.
   // array of previous amplitudes
+  //std::string name;
   bool noteIsOn = false;
   bool turnNoteOff = false;
   int currentNote = 0;
@@ -171,14 +172,23 @@ public:
 
   // sample the channel and add to ring buf
   void updateSignalData() {
+    // TODO broken
+    Serial.println("Got to start of func");
     signalData tmpData = signalCheck(freqPointer, peakPointer, 
       *freqRingBuf.peek(freqRingBuf.numElements() - 1), *peakRingBuf.peek(peakRingBuf.numElements() - 1));
+    Serial.println("Got past tmpData setup");
     int midiNote = freqToMidiNote(tmpData.freq);
+    Serial.println("Got past freqToMidiNote");
     int midiVel = peakToMidiVelocity(tmpData.peak);
+    Serial.println("Got past peakToMidiVelocity");
     freqRingBuf.add(tmpData.freq, true);
+    Serial.println("Got past freqRingBuf.add");
     peakRingBuf.add(tmpData.peak, true);
+    Serial.println("Got past peakRingBuf.add");
     noteRingBuf.add(midiNote, true);
+    Serial.println("Got past noteRingBuf.add");
     velRingBuf.add(midiVel, true);
+    Serial.println("Got past velRingBuf.add");
   }
 
 
@@ -294,7 +304,8 @@ void setup() {
   AudioMemory(512);
   cs42448_1.enable();
   cs42448_1.volume(1.0);
-  cs42448_1.inputLevel(4.0);
+  //cs42448_1.inputLevel(4.0);
+  cs42448_1.inputLevel(2.0);
 
   delay(1000);
   Serial.println("got past audio chip setup");
@@ -318,6 +329,7 @@ void setup() {
     string.noteRingBuf.add(0);
     string.freqPointer = &freqs[stringStepper]; 
     string.peakPointer = &peaks[stringStepper];
+    //string.name = sprintf("string%d", stringStepper);
     stringStepper++;
   }
 
@@ -330,13 +342,22 @@ void setup() {
 void loop() {
   // audio interaction
   // update strings signal data
+  Serial.println("Got to start of loop");
   for(SingleNoteTracker string : strings) {
-    string.updateSignalData();
+    //Serial.println("Updating string %s", string.name)
+    Serial.println("Got into the SingleNoteTracker for loop");
+    // TODO issues somewhere in below func...
+    // TODO so... for some reason, if this string.updateSignalData();
+    // gets included in this loop, LITERALLY nothing runs in the loop(); !
+    //string.updateSignalData();
     //if (string.hasAnythingChanged()) {
       // manage midi notes
-      string.stringSignalToMidi();
+      // string.stringSignalToMidi();
     //}
   }
+
+  delay(10000);
+  Serial.println("updated strings");
 
   //commented for testing no midi connection yet
   //while (usbMIDI.read()) {
