@@ -83,7 +83,12 @@ std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6}
 // TODO, WIP
 //
 
+//
 // blinkenlights
+//
+
+long previousMillis = 0;
+
 struct rgbPins {int r, g, b;};
 
 rgbPins led1 = {0, 1, 2};
@@ -96,44 +101,13 @@ rgbVals l1v = {255,0,255};
 rgbVals l2v = {255,255,0};
 rgbVals l3v = {0,255,255};
 
-
-void rgbOn (rgbPins l) {
-  analogWrite(l.r, 0);
-  analogWrite(l.g, 0);
-  analogWrite(l.b, 0);
-}
-
-void rgbOff (rgbPins l) {
-  analogWrite(l.r, 255);
-  analogWrite(l.g, 255);
-  analogWrite(l.b, 255);
-}
-
-// These color values are based on Common Anode RGB LED's, not Cathode so LOW = 1, HIGH = 0
-void rgbOrange (rgbPins l) {
-  analogWrite(l.r, 0);
-  analogWrite(l.g, 175);
-  analogWrite(l.b, 255);
-}
-
-void rgbPurple (rgbPins l) {
-  analogWrite(l.r, 0);
-  analogWrite(l.g, 255);
-  analogWrite(l.b, 0);
-}
-
-void rgbYellow (rgbPins l) {
-  analogWrite(l.r, 0);
-  analogWrite(l.g, 75);
-  analogWrite(l.b, 255);
-}
-
 void rgbIn (rgbPins l, rgbVals v) {
   analogWrite(l.r, v.r);
   analogWrite(l.g, v.g);
   analogWrite(l.b, v.b);
 }
 
+// roll through the color spectrum
 rgbVals cycleLedRGB (rgbVals v) {
   static int counter;
   // red to orange/yellow
@@ -246,8 +220,8 @@ void SingleNoteTracker::test() {
 // tried with and without 'this->' signifiers, i don't think they are needed
 // 
 void SingleNoteTracker::updateSignalData() {
-  int lastFreqIndex = this->freqRingBuf.numElements(); 
-  int lastPeakIndex = this->peakRingBuf.numElements();
+  int lastFreqIndex = freqRingBuf.numElements(); 
+  int lastPeakIndex = peakRingBuf.numElements();
   //Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
   //float lastFreq = this->*freqRingBuf.peek(lastFreqIndex);
   //float lastPeak = this->*peakRingBuf.peek(lastPeakIndex);
@@ -256,6 +230,7 @@ void SingleNoteTracker::updateSignalData() {
   //float lastPeak = *peakRingBuf.peek(peakRingBuf.numElements() - 1);
   float lastPeak = 0.0;
   signalData tmpData;
+  // this freqPointer also seems to not work...
   if (this->freqPointer->available() && this->peakPointer->available()) {
     //Serial.println("Got a freq and peak available.");
     float note = this->freqPointer->read();
@@ -415,15 +390,18 @@ void setup() {
 //  pinMode(12, OUTPUT);
 
   // start frequency monitors
+  // this method does not work, and idk why
   //for( AudioAnalyzeNoteFrequency freq : freqs) {
   //  freq.begin(confidenceThreshold);
   //}
+  //
   notefreq1.begin(confidenceThreshold);
   notefreq2.begin(confidenceThreshold);
   notefreq3.begin(confidenceThreshold);
   notefreq4.begin(confidenceThreshold);
   notefreq5.begin(confidenceThreshold);
   notefreq6.begin(confidenceThreshold);
+  //
 
   rgbIn(led2,l2v);
 
@@ -434,10 +412,11 @@ void setup() {
   // setup string pointers... 
   int stringStepper = 0;
   for(SingleNoteTracker string : strings) {
-    string.freqRingBuf.add(0.0,true);
-    string.peakRingBuf.add(0.0,true);
-    string.velRingBuf.add(0,true);
-    string.noteRingBuf.add(0,true);
+    Serial.printf("Setting up string %d\n", stringStepper + 1);
+    string.freqRingBuf.add(0.0);
+    string.peakRingBuf.add(0.0);
+    string.velRingBuf.add(0);
+    string.noteRingBuf.add(0);
     string.freqPointer = &freqs[stringStepper]; 
     string.peakPointer = &peaks[stringStepper];
     stringStepper++;
@@ -459,12 +438,13 @@ void cycleRGBs(){
   // TODO the wiring means the audio signals 
   // pick up some weirdness when the PWM is 
   // changing a bunch
-  delay(5);
+  delay(25);
 }
 
 void loop() {
   // audio interaction
   // update strings signal data
+  
   //Serial.println("Got to start of loop");
   int stringNumber = 1;
   for(SingleNoteTracker string : strings) {
@@ -480,7 +460,20 @@ void loop() {
     //}
     stringNumber++;
   }
+  
   cycleRGBs();
+
+  // more testing//
+  if (notefreq1.available() && peak1.available()) {
+    float freq = notefreq1.read();
+    float peak = peak1.read();
+    int note = freqToMidiNote(freq);
+    int vel = peakToMidiVelocity(peak);
+    Serial.printf("freq: %f\tnote: %d\tpeak: %f\tvel: %d\n", freq, note, peak, vel);
+  }
+
+  // wait more
+  //delay(5000);
 
   //commented for testing no midi connection yet
   //while (usbMIDI.read()) {
