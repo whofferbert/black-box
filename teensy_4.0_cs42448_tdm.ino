@@ -9,9 +9,18 @@
 #include <SD.h>
 #include <SerialFlash.h>
 #include <math.h>
+#include <string>
 #include <vector>
 // https://github.com/wizard97/Embedded_RingBuf_CPP
 #include "RingBufCPP.h"
+
+// best current fix for both of: 
+// undefined reference to `__exidx_end'
+// undefined reference to `__exidx_start'
+unsigned __exidx_start;
+unsigned __exidx_end;
+// re: https://forum.pjrc.com/threads/57192-Teensy-4-0-linker-issues-with-STL-libraries
+// might break things that are already broken
 
 // midi channel selection
 // is this 0 or 1 based?
@@ -153,8 +162,8 @@ int freqToMidiNote(float freq) {
 }
 
 int peakToMidiVelocity(float peak) {
-  // convert float to 0-99 scale
-  return(int(peak * 100.0));
+  // convert float to 0-127 scale
+  return(int(peak * 127.0));
 }
 
 void sendNoteOn(int note, int velocity) {
@@ -182,7 +191,8 @@ class SingleNoteTracker
 public:
   // ring buffers.
   // array of previous amplitudes
-  //std::string name;
+  std::string name;
+  // really should be a std::string or something
   bool noteIsOn = false;
   bool turnNoteOff = false;
   int currentNote = 0;
@@ -220,6 +230,7 @@ void SingleNoteTracker::test() {
 // tried with and without 'this->' signifiers, i don't think they are needed
 // 
 void SingleNoteTracker::updateSignalData() {
+  //Serial.printf("Updating %s\n", name);
   int lastFreqIndex = freqRingBuf.numElements(); 
   int lastPeakIndex = peakRingBuf.numElements();
   //Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
@@ -231,15 +242,12 @@ void SingleNoteTracker::updateSignalData() {
   float lastPeak = 0.0;
   signalData tmpData;
   // this freqPointer also seems to not work...
-  if (this->freqPointer->available() && this->peakPointer->available()) {
-    //Serial.println("Got a freq and peak available.");
-    float note = this->freqPointer->read();
+  if (freqPointer->available() && peakPointer->available()) {
+    float note = freqPointer->read();
+    float peak = peakPointer->read();
     //float prob = freqPointer->probability();
-    float peak = this->peakPointer->read();
     tmpData.freq = note;
     tmpData.peak = peak;
-    // debugging/testing
-    //int peakProb = peak * 100.0;
   } else {
     // TODO there's issues with this logic...
     // like what happens when a signal goes away
@@ -247,14 +255,14 @@ void SingleNoteTracker::updateSignalData() {
     tmpData.freq = lastFreq;
     tmpData.peak = lastPeak;
   }
-  // TODO this never works, because we're never
+  // TODO apparently this never works, because we're never
   // adding things to the ringbufs
   int midiNote = freqToMidiNote(tmpData.freq);
   int midiVel = peakToMidiVelocity(tmpData.peak);
-  this->freqRingBuf.add(tmpData.freq, true);
-  this->peakRingBuf.add(tmpData.peak, true);
-  this->noteRingBuf.add(midiNote, true);
-  this->velRingBuf.add(midiVel, true);
+  freqRingBuf.add(tmpData.freq, true);
+  peakRingBuf.add(tmpData.peak, true);
+  noteRingBuf.add(midiNote, true);
+  velRingBuf.add(midiVel, true);
 }
 
 
@@ -370,7 +378,9 @@ void setup() {
   cs42448_1.volume(1.0);
   cs42448_1.inputLevel(3.0);
 
+  // turn on led1 after audio chip init
   rgbIn(led1,l1v);
+
   // debug/testing
   Serial.begin(9600);
 
@@ -378,20 +388,8 @@ void setup() {
   Serial.println("got past audio chip init and serial begin");
   delay(1000);
 
-  // LEDs
-//  pinMode(0, OUTPUT);
-//  pinMode(1, OUTPUT);
-//  pinMode(2, OUTPUT);
-//  pinMode(4, OUTPUT);
-//  pinMode(5, OUTPUT);
-//  pinMode(6, OUTPUT);
-//  pinMode(10, OUTPUT);
-//  pinMode(11, OUTPUT);
-//  pinMode(12, OUTPUT);
-
   // start frequency monitors
-  // this method does not work, and idk why
-  //for( AudioAnalyzeNoteFrequency freq : freqs) {
+  //for( AudioAnalyzeNoteFrequency freq : freqs) { // this method does not work, idk why
   //  freq.begin(confidenceThreshold);
   //}
   //
@@ -403,6 +401,7 @@ void setup() {
   notefreq6.begin(confidenceThreshold);
   //
 
+  // led2 on after frequency analysis starts
   rgbIn(led2,l2v);
 
   delay(1000);
@@ -412,7 +411,8 @@ void setup() {
   // setup string pointers... 
   int stringStepper = 0;
   for(SingleNoteTracker string : strings) {
-    Serial.printf("Setting up string %d\n", stringStepper + 1);
+    //char *;
+    //int size = asprintf(&x, "%s%s%s", "12", "34", "56");
     string.freqRingBuf.add(0.0);
     string.peakRingBuf.add(0.0);
     string.velRingBuf.add(0);
@@ -422,6 +422,7 @@ void setup() {
     stringStepper++;
   }
 
+  // led3 on after string setup
   rgbIn(led3,l3v);
   delay(1000);
   Serial.println("got past string setup");
@@ -438,7 +439,7 @@ void cycleRGBs(){
   // TODO the wiring means the audio signals 
   // pick up some weirdness when the PWM is 
   // changing a bunch
-  delay(25);
+  delay(23);
 }
 
 void loop() {
@@ -453,7 +454,7 @@ void loop() {
     // this works...
     //string.test();
     // TODO issues somewhere in below func...
-    string.updateSignalData();
+    //string.updateSignalData();
     //if (string.hasAnythingChanged()) {
       // manage midi notes
       // string.stringSignalToMidi();
