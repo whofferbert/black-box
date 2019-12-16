@@ -84,11 +84,17 @@ std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6}
 //
 
 // blinkenlights
-struct rgbPins {int r, g, b;} ;
+struct rgbPins {int r, g, b;};
 
 rgbPins led1 = {0, 1, 2};
 rgbPins led2 = {4, 5, 6};
 rgbPins led3 = {10, 11, 12};
+
+struct rgbVals {int r, g, b;};
+
+rgbVals l1v = {255,0,255};
+rgbVals l2v = {255,255,0};
+rgbVals l3v = {0,255,255};
 
 
 void rgbOn (rgbPins l) {
@@ -122,10 +128,32 @@ void rgbYellow (rgbPins l) {
   analogWrite(l.b, 255);
 }
 
-void rgbIn (rgbPins l, int r, int g, int b) {
-  analogWrite(l.r, r);
-  analogWrite(l.g, g);
-  analogWrite(l.b, b);
+void rgbIn (rgbPins l, rgbVals v) {
+  analogWrite(l.r, v.r);
+  analogWrite(l.g, v.g);
+  analogWrite(l.b, v.b);
+}
+
+rgbVals cycleLedRGB (rgbVals v) {
+  static int counter;
+  // red to orange/yellow
+  if (v.r == 0 && v.g > 0 && v.b == 255) {
+    v.g--;
+  // yellow to green
+  } else if (v.r < 255 && v.g == 0 && v.b == 255) {
+    v.r++;
+  // green to blue
+  } else if (v.r == 255 && v.g < 255 && v.b > 0) {
+    v.g++;
+    v.b--;
+  // blue to violet
+  } else if (v.r > 0 && v.g == 255 && v.b == 0) {
+    v.r--;
+  // violet to red
+  } else if (v.r == 0 && v.g == 255 && v.b < 255) {
+    v.b++;
+  }
+  return v;
 }
 
 //
@@ -220,7 +248,7 @@ void SingleNoteTracker::test() {
 void SingleNoteTracker::updateSignalData() {
   int lastFreqIndex = this->freqRingBuf.numElements(); 
   int lastPeakIndex = this->peakRingBuf.numElements();
-  Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
+  //Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
   //float lastFreq = this->*freqRingBuf.peek(lastFreqIndex);
   //float lastPeak = this->*peakRingBuf.peek(lastPeakIndex);
   //float lastFreq = *freqRingBuf.peek(freqRingBuf.numElements() - 1);
@@ -229,7 +257,7 @@ void SingleNoteTracker::updateSignalData() {
   float lastPeak = 0.0;
   signalData tmpData;
   if (this->freqPointer->available() && this->peakPointer->available()) {
-    Serial.println("Got a freq and peak available.");
+    //Serial.println("Got a freq and peak available.");
     float note = this->freqPointer->read();
     //float prob = freqPointer->probability();
     float peak = this->peakPointer->read();
@@ -367,6 +395,7 @@ void setup() {
   cs42448_1.volume(1.0);
   cs42448_1.inputLevel(3.0);
 
+  rgbIn(led1,l1v);
   // debug/testing
   Serial.begin(9600);
 
@@ -396,6 +425,8 @@ void setup() {
   notefreq5.begin(confidenceThreshold);
   notefreq6.begin(confidenceThreshold);
 
+  rgbIn(led2,l2v);
+
   delay(1000);
   Serial.println("got past frequency config");
   delay(1000);
@@ -412,16 +443,29 @@ void setup() {
     stringStepper++;
   }
 
+  rgbIn(led3,l3v);
   delay(1000);
   Serial.println("got past string setup");
   delay(1000);
 }
 
+void cycleRGBs(){
+  l1v = cycleLedRGB(l1v);
+  l2v = cycleLedRGB(l2v);
+  l3v = cycleLedRGB(l3v);
+  rgbIn(led1,l1v);
+  rgbIn(led2,l2v);
+  rgbIn(led3,l3v);
+  // TODO the wiring means the audio signals 
+  // pick up some weirdness when the PWM is 
+  // changing a bunch
+  delay(5);
+}
 
 void loop() {
   // audio interaction
   // update strings signal data
-  Serial.println("Got to start of loop");
+  //Serial.println("Got to start of loop");
   int stringNumber = 1;
   for(SingleNoteTracker string : strings) {
     // this works...
@@ -436,17 +480,7 @@ void loop() {
     //}
     stringNumber++;
   }
-
-  Serial.println("left LED on:");
-
-  rgbOn(led1);
-
-  delay(5000);
-  Serial.println("updated strings");
-
-  Serial.println("left LED off:");
-  rgbOff(led1);
-  delay(5000);
+  cycleRGBs();
 
   //commented for testing no midi connection yet
   //while (usbMIDI.read()) {
