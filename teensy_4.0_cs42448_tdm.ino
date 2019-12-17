@@ -222,24 +222,18 @@ void SingleNoteTracker::test() {
 }
 
 // sample the channel and add to ring buf
-//
-//
-// TODO this is broken in general. requires more poking/understanding
-// can't seem to be able to add things to the ring buffers properly
-//
-// tried with and without 'this->' signifiers, i don't think they are needed
-// 
+// TODO verify this works properly
 void SingleNoteTracker::updateSignalData() {
   //Serial.printf("Updating %s\n", name);
   int lastFreqIndex = freqRingBuf.numElements(); 
   int lastPeakIndex = peakRingBuf.numElements();
   //Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
-  //float lastFreq = this->*freqRingBuf.peek(lastFreqIndex);
-  //float lastPeak = this->*peakRingBuf.peek(lastPeakIndex);
-  //float lastFreq = *freqRingBuf.peek(freqRingBuf.numElements() - 1);
-  float lastFreq = 0.0;
-  //float lastPeak = *peakRingBuf.peek(peakRingBuf.numElements() - 1);
-  float lastPeak = 0.0;
+  //float lastFreq = *freqRingBuf.peek(lastFreqIndex);
+  //float lastPeak = *peakRingBuf.peek(lastPeakIndex);
+  float lastFreq = *freqRingBuf.peek(freqRingBuf.numElements() - 1);
+  //float lastFreq = 0.0;
+  float lastPeak = *peakRingBuf.peek(peakRingBuf.numElements() - 1);
+  //float lastPeak = 0.0;
   signalData tmpData;
   // this freqPointer also seems to not work...
   if (freqPointer->available() && peakPointer->available()) {
@@ -389,17 +383,17 @@ void setup() {
   delay(1000);
 
   // start frequency monitors
-  //for( AudioAnalyzeNoteFrequency freq : freqs) { // this method does not work, idk why
-  //  freq.begin(confidenceThreshold);
-  //}
-  //
+  for( AudioAnalyzeNoteFrequency & freq : freqs) {
+    freq.begin(confidenceThreshold);
+  }
+  /*
   notefreq1.begin(confidenceThreshold);
   notefreq2.begin(confidenceThreshold);
   notefreq3.begin(confidenceThreshold);
   notefreq4.begin(confidenceThreshold);
   notefreq5.begin(confidenceThreshold);
   notefreq6.begin(confidenceThreshold);
-  //
+  */
 
   // led2 on after frequency analysis starts
   rgbIn(led2,l2v);
@@ -410,7 +404,7 @@ void setup() {
 
   // setup string pointers... 
   int stringStepper = 0;
-  for(SingleNoteTracker string : strings) {
+  for(SingleNoteTracker & string : strings) {
     //char *;
     //int size = asprintf(&x, "%s%s%s", "12", "34", "56");
     string.freqRingBuf.add(0.0);
@@ -447,24 +441,25 @@ void loop() {
   // update strings signal data
   
   //Serial.println("Got to start of loop");
-  int stringNumber = 1;
-  for(SingleNoteTracker string : strings) {
+  //int stringNumber = 1;
+  for(SingleNoteTracker & string : strings) {
     // this works...
     //Serial.printf("String: %d\tCurrent Note: %d\n", stringNumber, string.currentNote);
     // this works...
     //string.test();
     // TODO issues somewhere in below func...
-    //string.updateSignalData();
+    string.updateSignalData();
     //if (string.hasAnythingChanged()) {
       // manage midi notes
       // string.stringSignalToMidi();
     //}
-    stringNumber++;
+    //stringNumber++;
   }
   
   cycleRGBs();
 
   // more testing//
+  /*
   if (notefreq1.available() && peak1.available()) {
     float freq = notefreq1.read();
     float peak = peak1.read();
@@ -472,6 +467,7 @@ void loop() {
     int vel = peakToMidiVelocity(peak);
     Serial.printf("freq: %f\tnote: %d\tpeak: %f\tvel: %d\n", freq, note, peak, vel);
   }
+  */
 
   // wait more
   //delay(5000);
