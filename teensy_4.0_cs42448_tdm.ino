@@ -19,6 +19,7 @@
 #include <vector>
 // https://github.com/wizard97/Embedded_RingBuf_CPP
 #include "RingBufCPP.h"
+#include "Blinkenlights.h"
 #include "SingleNoteTracker.h"
 
 // best current fix for both of: 
@@ -38,73 +39,22 @@ unsigned long intervalLedMillis = 2;
 unsigned long previousSerialMillis = 0;
 unsigned long intervalSerialMillis = 1000;
 
-//
-//
-// blinkenlights, 3x rgb led
-//
-//
+// TODO make new led objects
 
-struct rgbPins {int r, g, b;};
-
-rgbPins led1 = {0, 1, 2};
-rgbPins led2 = {4, 5, 6};
-rgbPins led3 = {10, 11, 12};
-
-struct rgbVals {int r, g, b;};
-
-// green
-rgbVals l1v = {255,0,255};
-// blue
-rgbVals l2v = {255,255,0};
-// red
-rgbVals l3v = {0,255,255};
-
-void rgbIn(rgbPins l, rgbVals v) {
-  analogWrite(l.r, v.r);
-  analogWrite(l.g, v.g);
-  analogWrite(l.b, v.b);
-}
-
-// roll through the color spectrum
-rgbVals cycleLedRGB (rgbVals v) {
-  static int counter;
-  // red to orange/yellow
-  if (v.r == 0 && v.g > 0 && v.b == 255) {
-    v.g--;
-  // yellow to green
-  } else if (v.r < 255 && v.g == 0 && v.b == 255) {
-    v.r++;
-  // green to blue
-  } else if (v.r == 255 && v.g < 255 && v.b > 0) {
-    v.g++;
-    v.b--;
-  // blue to violet
-  } else if (v.r > 0 && v.g == 255 && v.b == 0) {
-    v.r--;
-  // violet to red
-  } else if (v.r == 0 && v.g == 255 && v.b < 255) {
-    v.b++;
-  }
-  return v;
-}
+rgbLED led1;
+rgbLED led2;
+rgbLED led3;
 
 void cycleRGBs(){
   if (currentMillis - previousLedMillis > intervalLedMillis) {
     previousLedMillis = currentMillis;
-    l1v = cycleLedRGB(l1v);
-    l2v = cycleLedRGB(l2v);
-    l3v = cycleLedRGB(l3v);
-    rgbIn(led1,l1v);
-    rgbIn(led2,l2v);
-    rgbIn(led3,l3v);
+    led1.roygbiv_cycle();
+    led2.roygbiv_cycle();
+    led3.roygbiv_cycle();
+    led1.on();
+    led2.on();
+    led3.on();
   }
-  // TODO the wiring means the audio signals 
-  // pick up some weirdness when the PWM is 
-  // changing a bunch
-  // TODO this should be on a timestamped cycle, to release control back to the main loop
-  // or maybe not delayed :|
-  //delay(23);
-  //delay(1);
 }
 
 
@@ -196,8 +146,16 @@ void setup() {
   cs42448_1.volume(1.0);
   cs42448_1.inputLevel(3.0);
 
+  led1.pins = {0, 1, 2};
+  led2.pins = {4, 5, 6};
+  led3.pins = {10, 11, 12};
+
+  led1.GREEN();
+  led2.BLUE();
+  led3.RED();
+
   // turn on led1 after audio chip init
-  rgbIn(led1,l1v);
+  led1.on();
 
   // debug/testing
   Serial.begin(9600);
@@ -212,7 +170,8 @@ void setup() {
   }
 
   // led2 on after frequency analysis starts
-  rgbIn(led2,l2v);
+  //rgbIn(led2,l2v);
+  led2.on();
 
   delay(1000);
   Serial.println("got past frequency config");
@@ -232,7 +191,8 @@ void setup() {
   }
 
   // led3 on after string setup
-  rgbIn(led3,l3v);
+  led3.on();
+  //rgbIn(led3,l3v);
   delay(1000);
   Serial.println("got past string setup");
   delay(1000);
