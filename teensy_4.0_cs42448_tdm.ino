@@ -1,7 +1,14 @@
 // testing grounds!
-// WIP
 // here be dragons
-// and whofferbert hacks
+// and whofferbert hacks, documented in ERRATA.txt
+//
+// okay so, general idea here is to take audio data from a guitar or bass.
+// each string has it's own isolated pickup
+// then turn the data from each individual string in to the base frequency and amplitude data.
+// that data will then be analyzed / possibly modulated, and afterward,
+// get translated into midi data, and sent over USB to whatever is powering the thing.
+//
+//  win.
 
 #include <Audio.h>
 #include <Wire.h>
@@ -9,7 +16,6 @@
 #include <SD.h>
 #include <SerialFlash.h>
 #include <math.h>
-#include <string>
 #include <vector>
 // https://github.com/wizard97/Embedded_RingBuf_CPP
 #include "RingBufCPP.h"
@@ -20,7 +26,7 @@
 unsigned __exidx_start;
 unsigned __exidx_end;
 // re: https://forum.pjrc.com/threads/57192-Teensy-4-0-linker-issues-with-STL-libraries
-// might break things that are already broken
+// might break things that are already broken, but it's over my head
 
 // midi channel selection
 // is this 0 or 1 based?
@@ -38,6 +44,92 @@ const int midiMinimumVelocityThreshold = 2;
 // note frequency confidence factor
 // 0.15 = default. 0.11 = scrutiny
 const float confidenceThreshold = 0.11;
+
+// master timer
+unsigned long currentMillis = 0;
+
+unsigned long previousLedMillis = 0;
+unsigned long intervalLedMillis = 2;
+
+unsigned long previousSerialMillis = 0;
+unsigned long intervalSerialMillis = 150;
+
+//
+//
+// blinkenlights, 3x rgb led
+//
+//
+
+struct rgbPins {int r, g, b;};
+
+rgbPins led1 = {0, 1, 2};
+rgbPins led2 = {4, 5, 6};
+rgbPins led3 = {10, 11, 12};
+
+struct rgbVals {int r, g, b;};
+
+// green
+rgbVals l1v = {255,0,255};
+// blue
+rgbVals l2v = {255,255,0};
+// red
+rgbVals l3v = {0,255,255};
+
+void rgbIn(rgbPins l, rgbVals v) {
+  analogWrite(l.r, v.r);
+  analogWrite(l.g, v.g);
+  analogWrite(l.b, v.b);
+}
+
+// roll through the color spectrum
+rgbVals cycleLedRGB (rgbVals v) {
+  static int counter;
+  // red to orange/yellow
+  if (v.r == 0 && v.g > 0 && v.b == 255) {
+    v.g--;
+  // yellow to green
+  } else if (v.r < 255 && v.g == 0 && v.b == 255) {
+    v.r++;
+  // green to blue
+  } else if (v.r == 255 && v.g < 255 && v.b > 0) {
+    v.g++;
+    v.b--;
+  // blue to violet
+  } else if (v.r > 0 && v.g == 255 && v.b == 0) {
+    v.r--;
+  // violet to red
+  } else if (v.r == 0 && v.g == 255 && v.b < 255) {
+    v.b++;
+  }
+  return v;
+}
+
+void cycleRGBs(){
+  if (currentMillis - previousLedMillis > intervalLedMillis) {
+    previousLedMillis = currentMillis;
+    l1v = cycleLedRGB(l1v);
+    l2v = cycleLedRGB(l2v);
+    l3v = cycleLedRGB(l3v);
+    rgbIn(led1,l1v);
+    rgbIn(led2,l2v);
+    rgbIn(led3,l3v);
+  }
+  // TODO the wiring means the audio signals 
+  // pick up some weirdness when the PWM is 
+  // changing a bunch
+  // TODO this should be on a timestamped cycle, to release control back to the main loop
+  // or maybe not delayed :|
+  //delay(23);
+  //delay(1);
+}
+
+
+//
+//
+// The rest is mostly just audio stuff
+//
+//
+
 
 // GUItool: begin automatically generated code
 AudioInputTDM            tdm1;           //xy=256.75,414.75
@@ -86,107 +178,58 @@ AudioConnection          patchCord27(mixer1, 0, mixer2, 2);
 AudioControlCS42448      cs42448_1;
 // GUItool: end automatically generated code
 
+
+// vectors of pointers to some of the above...
 std::vector<AudioAnalyzeNoteFrequency *> freqs = {&notefreq1, &notefreq2, &notefreq3, &notefreq4, &notefreq5, &notefreq6};
 std::vector<AudioAnalyzePeak *> peaks = {&peak1, &peak2, &peak3, &peak4, &peak5, &peak6};
-//
-// TODO, WIP
-//
-
-//
-// blinkenlights
-//
-
-// long previousMillis = 0;
-
-struct rgbPins {int r, g, b;};
-
-rgbPins led1 = {0, 1, 2};
-rgbPins led2 = {4, 5, 6};
-rgbPins led3 = {10, 11, 12};
-
-struct rgbVals {int r, g, b;};
-
-rgbVals l1v = {255,0,255};
-rgbVals l2v = {255,255,0};
-rgbVals l3v = {0,255,255};
-
-void rgbIn (rgbPins l, rgbVals v) {
-  analogWrite(l.r, v.r);
-  analogWrite(l.g, v.g);
-  analogWrite(l.b, v.b);
-}
-
-// roll through the color spectrum
-rgbVals cycleLedRGB (rgbVals v) {
-  static int counter;
-  // red to orange/yellow
-  if (v.r == 0 && v.g > 0 && v.b == 255) {
-    v.g--;
-  // yellow to green
-  } else if (v.r < 255 && v.g == 0 && v.b == 255) {
-    v.r++;
-  // green to blue
-  } else if (v.r == 255 && v.g < 255 && v.b > 0) {
-    v.g++;
-    v.b--;
-  // blue to violet
-  } else if (v.r > 0 && v.g == 255 && v.b == 0) {
-    v.r--;
-  // violet to red
-  } else if (v.r == 0 && v.g == 255 && v.b < 255) {
-    v.b++;
-  }
-  return v;
-}
-
-//
-//
-// okay so, general idea here is to take audio data from a guitar or bass.
-// each string has it's own isolated pickup
-// then turn the data from each individual string in to the base frequency and amplitude data.
-// that data will then be analyzed / possibly modulated, and afterward,
-// get translated into midi data, and sent over USB to whatever is powering the thing.
-//
-//  win.
 
 
 // bits of data to pass
 struct signalData {float freq, peak;};
-//struct midiData {unsigned int note, velocity;};
 
+
+// TODO the following four funcs might be better off in teh single note tracker class
 // thanks, https://newt.phys.unsw.edu.au/jw/notes.html
-unsigned int freqToMidiNote(float freq) {
+unsigned char freqToMidiNote(float freq) {
   // 12 notes per scale, log base 2 (freq / reference freq) + ref freq midi number
   // 12 * (f/440) + 69
   unsigned int ret = roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0;
   return ret;
-  //return( int( roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0 ) );
 }
 
-unsigned int peakToMidiVelocity(float peak) {
+
+unsigned char peakToMidiVelocity(float peak) {
   // convert float to 0-127 scale
-  unsigned int ret = peak * 127.0;
+  unsigned char ret = peak * 127.0;
   return(ret);
 }
 
-void sendNoteOn(int note, int velocity) {
+
+void sendNoteOn(unsigned char note, unsigned char velocity) {
+  if (note > 127 || note < 0) {
+    return;
+  }
+  if (velocity > 127 || velocity < 0) {
+    return;
+  }
   // TODO option for always full velocity?
   // TODO velocity mod?
-  //usbMIDI.sendNoteOn(60, 99, midiChannel);  // 60 = C4
-  Serial.printf("Would have sent note %s ON, vel %s\n", note, velocity);
-  //usbMIDI.sendNoteOn(note, velocity, midiChannel);
+  //Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
+  usbMIDI.sendNoteOn(int(note), int(velocity), midiChannel);
 }
 
-void sendNoteOff(int note) {
-  //usbMIDI.sendNoteOff(60, 0, midiChannel);  // 60 = C4
-  Serial.printf("Would have sent note %s OFF\n", note);
-  //usbMIDI.sendNoteOff(note, 0, midiChannel);
-}
 
+void sendNoteOff(unsigned char note) {
+  if (note > 127 || note < 0) {
+    return;
+  }
+  //Serial.printf("Would have sent note %d OFF\n", note);
+  usbMIDI.sendNoteOff(note, 0, midiChannel);
+}
 
 
 // maybe investigate how to apply volume control/fade per active midi note, for decay
-// TODO this class is out of hand. perhaps should be in another .cpp and .h file
+// TODO this class is lengthy. perhaps should be in another .cpp and .h file
 
 // single string monitoring
 class SingleNoteTracker
@@ -194,17 +237,16 @@ class SingleNoteTracker
 public:
   // ring buffers.
   // array of previous amplitudes
-  std::string name;
-  // really should be a std::string or something
+  unsigned char name;
   bool noteIsOn = false;
   bool turnNoteOff = false;
-  int currentNote = 0;
-  int newNote = 0;
-  int currentVel = 0;
-  int newVel = 0;
-  RingBufCPP<int, peakRingBufferLength> velRingBuf;
+  unsigned char currentNote = 0;
+  unsigned char newNote = 0;
+  unsigned char currentVel = 0;
+  unsigned char newVel = 0;
+  RingBufCPP<unsigned char, peakRingBufferLength> velRingBuf;
   // array of previous midi notes
-  RingBufCPP<int, noteRingBufferLength> noteRingBuf;
+  RingBufCPP<unsigned char, noteRingBufferLength> noteRingBuf;
   // keep track of current pitch/freq/note?
   RingBufCPP<float, noteRingBufferLength> freqRingBuf;
   RingBufCPP<float, peakRingBufferLength> peakRingBuf;
@@ -217,12 +259,7 @@ public:
   bool amplitudeChanged();
   bool hasAnythingChanged();
   void stringSignalToMidi();
-  void test();
 };
-
-void SingleNoteTracker::test() {
-  Serial.printf("Velocity: %d\tstuff\n", currentVel);
-}
 
 // sample the channel and add to ring buf
 // this seems to work now
@@ -242,16 +279,25 @@ void SingleNoteTracker::updateSignalData() {
     //float prob = freqPointer->probability();
     tmpData.freq = note;
     tmpData.peak = peak;
-  } else {
-    // TODO there's issues with this logic...
+  //} else if (freqPointer->available() || peakPointer->available()) {
+  } else if (freqPointer->available()) {
+    // TODO there might be issues with this logic...
     // like what happens when a signal goes away
     // and the last signal we had was over the thresholds?
     tmpData.freq = lastFreq;
     tmpData.peak = lastPeak;
+  } else {
+    tmpData.freq = 0.0;
+    tmpData.peak = 0.0;
   }
-  unsigned int midiNote = freqToMidiNote(tmpData.freq);
-  unsigned int midiVel = peakToMidiVelocity(tmpData.peak);
-  //Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
+
+  unsigned char midiNote = freqToMidiNote(tmpData.freq);
+  unsigned char midiVel = peakToMidiVelocity(tmpData.peak);
+
+  //if (name == 0) {
+  //  Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
+  //}
+
   // this has to be working because of the above peek logic working.
   freqRingBuf.add(tmpData.freq, true);
   peakRingBuf.add(tmpData.peak, true);
@@ -265,13 +311,19 @@ void SingleNoteTracker::updateSignalData() {
 // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
 bool SingleNoteTracker::noteHasChanged() {
   int bufLen = noteRingBuf.numElements();
-  int total;
-  for (int i=0; i< buflen; i++) {
-    int noteVal = *noteRingBuf.peek(i);
+  unsigned char total = 0;
+  for (int i=0; i< bufLen; i++) {
+    // notebuf
+    unsigned char noteVal = *noteRingBuf.peek(i);
+    //if (name == 0) {
+    //  Serial.printf("%d %d;\t", i, noteVal);
+    //}
     total += noteVal;
   }
-  int average = roundf(float(total) / noteRingBuf.numElements());
-  Serial.printf("total: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+  unsigned char average = roundf(float(total) / bufLen);
+  //if (name == 0) {
+  //  Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+  //}
   if (average != currentNote) {
     newNote = average;
     return(true);
@@ -348,9 +400,7 @@ void SingleNoteTracker::stringSignalToMidi() {
   if ( newVel != currentVel) {
     currentVel = newVel;
   }
-
 }
-
 
 // more global vars for the string trackers...
 SingleNoteTracker string1;
@@ -360,13 +410,18 @@ SingleNoteTracker string4;
 SingleNoteTracker string5;
 SingleNoteTracker string6;
 
-//vector for stringsNoteTrackers
+// vector for stringsNoteTracker pointers
 std::vector<SingleNoteTracker *> strings = {&string1, &string2, &string3, &string4, &string5, &string6};
 
 
-
-
-// below here mostly works
+//
+void serialPrinter() {
+  if (currentMillis - previousSerialMillis > intervalSerialMillis) {
+    previousSerialMillis = currentMillis;
+    // possibly serial print things here
+    //Serial.println("got here");
+  }
+}
 
 void setup() {
   // setup audio chip first, for as short a blip as possible
@@ -399,13 +454,13 @@ void setup() {
   delay(1000);
 
   // setup string pointers... 
-  int stringStepper = 0;
+  unsigned char stringStepper = 0;
   for(SingleNoteTracker * string : strings) {
+    string->name = stringStepper;
     string->freqRingBuf.add(0.0);
     string->peakRingBuf.add(0.0);
     string->velRingBuf.add(0);
     string->noteRingBuf.add(0);
-    // TODO this might not be right here...
     string->freqPointer = freqs[stringStepper]; 
     string->peakPointer = peaks[stringStepper];
     stringStepper++;
@@ -418,49 +473,29 @@ void setup() {
   delay(1000);
 }
 
-void cycleRGBs(){
-  l1v = cycleLedRGB(l1v);
-  l2v = cycleLedRGB(l2v);
-  l3v = cycleLedRGB(l3v);
-  rgbIn(led1,l1v);
-  rgbIn(led2,l2v);
-  rgbIn(led3,l3v);
-  // TODO the wiring means the audio signals 
-  // pick up some weirdness when the PWM is 
-  // changing a bunch
-  delay(23);
-}
-
 void loop() {
+  // update timer for things
+  currentMillis = millis();
+
   // audio interaction
   // update strings signal data
-  
-  //Serial.println("Got to start of loop");
-  //int stringNumber = 1;
-  //
   for(SingleNoteTracker * string : strings) {
 
     string->updateSignalData();
 
-    //if (string->hasAnythingChanged()) {
-      //Serial.println("has changed");
+    if (string->hasAnythingChanged()) {
       // manage midi notes
-      //string->stringSignalToMidi();
-    //}
-    //stringNumber++;
+      string->stringSignalToMidi();
+    }
   }
-  //
   
   cycleRGBs();
 
-
-  // wait more
-  delay(150);
-  //Serial.println("loop()");
+  //serialPrinter();
 
   //commented for testing no midi connection yet
-  //while (usbMIDI.read()) {
+  while (usbMIDI.read()) {
     // ignore incoming messages, don't proliferate bugs
-  //}
+  }
 
 }
