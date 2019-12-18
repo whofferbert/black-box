@@ -39,6 +39,7 @@ unsigned char peakToMidiVelocity(float peak) {
 
 
 void sendNoteOn(unsigned char note, unsigned char velocity) {
+  Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
   if (note > 127 || note < 0) {
     return;
   }
@@ -47,16 +48,15 @@ void sendNoteOn(unsigned char note, unsigned char velocity) {
   }
   // TODO option for always full velocity?
   // TODO velocity mod?
-  //Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
   usbMIDI.sendNoteOn(int(note), int(velocity), midiChannel);
 }
 
 
 void sendNoteOff(unsigned char note) {
+  Serial.printf("Would have sent note %d OFF\n", note);
   if (note > 127 || note < 0) {
     return;
   }
-  //Serial.printf("Would have sent note %d OFF\n", note);
   usbMIDI.sendNoteOff(note, 0, midiChannel);
 }
 
@@ -95,7 +95,7 @@ void SingleNoteTracker::updateSignalData() {
   unsigned char midiVel = peakToMidiVelocity(tmpData.peak);
 
   //if (name == 0) {
-  //  Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
+    //Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
   //}
 
   // this has to be working because of the above peek logic working.
