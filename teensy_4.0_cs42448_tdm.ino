@@ -7,8 +7,6 @@
 // then turn the data from each individual string in to the base frequency and amplitude data.
 // that data will then be analyzed / possibly modulated, and afterward,
 // get translated into midi data, and sent over USB to whatever is powering the thing.
-//
-//  win.
 
 #include <Audio.h>
 #include <Wire.h>
@@ -30,7 +28,10 @@ unsigned __exidx_end;
 // re: https://forum.pjrc.com/threads/57192-Teensy-4-0-linker-issues-with-STL-libraries
 // might break things that are already broken, but it's over my head
 
-// master timer
+//
+// timer stuff
+//
+
 unsigned long currentMillis = 0;
 
 unsigned long previousLedMillis = 0;
@@ -39,7 +40,9 @@ unsigned long intervalLedMillis = 2;
 unsigned long previousSerialMillis = 0;
 unsigned long intervalSerialMillis = 1000;
 
-// TODO make new led objects
+//
+// LED stuff
+//
 
 rgbLED led1;
 rgbLED led2;
@@ -57,13 +60,22 @@ void cycleRGBs(){
   }
 }
 
-
 //
+// debugging
+//
+// TODO there should be a globally accessible ringbuf which gets written to
+// and then this reads what's in the buffer, clearing it.
+void serialPrinter() {
+  if (currentMillis - previousSerialMillis > intervalSerialMillis) {
+    previousSerialMillis = currentMillis;
+    // possibly serial print things here
+    Serial.println("got here");
+  }
+}
+
 //
 // The rest is mostly just audio stuff
 //
-//
-
 
 // GUItool: begin automatically generated code
 AudioInputTDM            tdm1;           //xy=256.75,414.75
@@ -112,11 +124,9 @@ AudioConnection          patchCord27(mixer1, 0, mixer2, 2);
 AudioControlCS42448      cs42448_1;
 // GUItool: end automatically generated code
 
-
 // vectors of pointers to some of the above...
 std::vector<AudioAnalyzeNoteFrequency *> freqs = {&notefreq1, &notefreq2, &notefreq3, &notefreq4, &notefreq5, &notefreq6};
 std::vector<AudioAnalyzePeak *> peaks = {&peak1, &peak2, &peak3, &peak4, &peak5, &peak6};
-
 
 // more global vars for the string trackers...
 SingleNoteTracker string1;
@@ -129,15 +139,6 @@ SingleNoteTracker string6;
 // vector for stringsNoteTracker pointers
 std::vector<SingleNoteTracker *> strings = {&string1, &string2, &string3, &string4, &string5, &string6};
 
-//
-void serialPrinter() {
-  if (currentMillis - previousSerialMillis > intervalSerialMillis) {
-    previousSerialMillis = currentMillis;
-    // possibly serial print things here
-    Serial.println("got here");
-  }
-}
-
 void setup() {
   // setup audio chip first, for as short a blip as possible
   // loooots of audio memory; thank you, teensy 4
@@ -146,10 +147,10 @@ void setup() {
   cs42448_1.volume(1.0);
   cs42448_1.inputLevel(3.0);
 
+  // setup LEDs
   led1.pins = {0, 1, 2};
   led2.pins = {4, 5, 6};
   led3.pins = {10, 11, 12};
-
   led1.GREEN();
   led2.BLUE();
   led3.RED();
@@ -160,9 +161,9 @@ void setup() {
   // debug/testing
   Serial.begin(9600);
 
-  delay(1000);
+  delay(750);
   Serial.println("got past audio chip init and serial begin");
-  delay(1000);
+  delay(750);
 
   // start frequency monitors
   for( AudioAnalyzeNoteFrequency * freq : freqs) {
@@ -170,14 +171,14 @@ void setup() {
   }
 
   // led2 on after frequency analysis starts
-  //rgbIn(led2,l2v);
   led2.on();
 
-  delay(1000);
+  delay(750);
   Serial.println("got past frequency config");
-  delay(1000);
+  delay(750);
 
   // setup string pointers... 
+  // TODO maybe there should be a new/init method that does this?
   unsigned char stringStepper = 0;
   for(SingleNoteTracker * string : strings) {
     string->name = stringStepper;
@@ -192,10 +193,10 @@ void setup() {
 
   // led3 on after string setup
   led3.on();
-  //rgbIn(led3,l3v);
-  delay(1000);
+
+  delay(750);
   Serial.println("got past string setup");
-  delay(1000);
+  delay(750);
 }
 
 
