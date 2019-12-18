@@ -51,9 +51,11 @@ rgbLED led3;
 void cycleRGBs(){
   if (currentMillis - previousLedMillis > intervalLedMillis) {
     previousLedMillis = currentMillis;
+    // increment counters
     led1.roygbiv_cycle();
     led2.roygbiv_cycle();
     led3.roygbiv_cycle();
+    // push new colors to pins
     led1.on();
     led2.on();
     led3.on();
@@ -151,8 +153,8 @@ void setup() {
   led1.pins = {0, 1, 2};
   led2.pins = {4, 5, 6};
   led3.pins = {10, 11, 12};
-  led1.GREEN();
-  led2.BLUE();
+  led1.BLUE();
+  led2.YELLOW();
   led3.RED();
 
   // turn on led1 after audio chip init
