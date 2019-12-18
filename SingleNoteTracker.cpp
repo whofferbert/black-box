@@ -121,10 +121,10 @@ bool SingleNoteTracker::noteHasChanged() {
     total += noteVal;
   }
   unsigned char average = roundf(float(total) / bufLen);
-  //if (name == 0) {
-  //  Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
-  //}
   if (average != currentNote) {
+    //if (name == 0) {
+    //  Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+    //}
     newNote = average;
     return(true);
   } else {
