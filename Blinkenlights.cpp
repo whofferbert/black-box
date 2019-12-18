@@ -47,25 +47,66 @@ void rgbLED::on() {
   analogWrite(pins.b, vals.b);
 }
 
-// roll through the color spectrum
+// roll through the color spectrum, with delays on ROYGBIV colors
 rgbVals rgbLED::cycleLedRGB (rgbVals v) {
-  static int counter;
+  //colorIncrementDelay
+  static int redDelay;
+  static int orangeDelay;
+  static int yellowDelay;
+  static int greenDelay;
+  static int blueDelay;
+  static int indigoDelay;
+  static int violetDelay;
+
   // red to orange/yellow
   if (v.r == 0 && v.g > 0 && v.b == 255) {
-    v.g--;
+    // reset previous counters
+    violetDelay = 0;
+    // pause on red
+    if (v.g == 0 && redDelay < colorIncrementDelay) { 
+      redDelay++;
+    } else if (v.g == 127 && orangeDelay < colorIncrementDelay) {
+      orangeDelay++;
+    } else {
+      v.g--;
+    }
   // yellow to green
   } else if (v.r < 255 && v.g == 0 && v.b == 255) {
-    v.r++;
+    redDelay = 0;
+    orangeDelay = 0;
+    if (v.r == 255 && yellowDelay < colorIncrementDelay) {
+      yellowDelay++;
+    } else {
+      v.r++;
+    }
   // green to blue
   } else if (v.r == 255 && v.g < 255 && v.b > 0) {
-    v.g++;
-    v.b--;
-  // blue to violet
+    yellowDelay = 0;
+    if (v.g == 0 && greenDelay < colorIncrementDelay) {
+      greenDelay++;
+    } else {
+      v.g++;
+      v.b--;
+    }
+  // blue to indigo/violet
   } else if (v.r > 0 && v.g == 255 && v.b == 0) {
-    v.r--;
+    greenDelay = 0;
+    if (v.r == 255 && blueDelay < colorIncrementDelay) {
+      blueDelay++;
+    } else if (v.r == 127 && indigoDelay < colorIncrementDelay) {
+      indigoDelay++;
+    } else {
+      v.r--;
+    }
   // violet to red
   } else if (v.r == 0 && v.g == 255 && v.b < 255) {
-    v.b++;
+    blueDelay = 0;
+    indigoDelay = 0;
+    if (v.b == 0 && violetDelay < colorIncrementDelay) {
+      violetDelay++;
+    } else {
+      v.b++;
+    }
   }
   return v;
 }
