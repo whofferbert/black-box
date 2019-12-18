@@ -1,14 +1,10 @@
-// testing grounds!
-// here be dragons
-// and whofferbert hacks, documented in ERRATA.txt
+// here be dragons, and whofferbert hacks, documented in ERRATA.txt
 //
 // okay so, general idea here is to take audio data from a guitar or bass.
 // each string has it's own isolated pickup
 // then turn the data from each individual string in to the base frequency and amplitude data.
 // that data will then be analyzed / possibly modulated, and afterward,
 // get translated into midi data, and sent over USB to whatever is powering the thing.
-//
-//  win.
 
 #ifndef SingleNoteTracker_H
 #define SingleNoteTracker_H
@@ -22,16 +18,20 @@
 // https://github.com/wizard97/Embedded_RingBuf_CPP
 #include "RingBufCPP.h"
 
+// note min/max
+const unsigned char noteMin = 21;  // 5 string bass with a low A0
+const unsigned char noteMax = 100; // high E7, 36th fret
+
 // midi channel selection
 // is this 0 or 1 based?
 const int midiChannel = 1;
 
-// midi note/peak buffer lengths.
+// local ring buffer lengths.
 // note: must be multiple of 2!
 // maybe make this 16? 24?
-const int noteRingBufferLength = 8;
-const int peakRingBufferLength = 8;
+const int ringBufferLength = 8;
 
+// TODO not implemented yet
 // when to turn off notes because they fade out.
 const int midiMinimumVelocityThreshold = 2;
 
@@ -40,19 +40,18 @@ const int midiMinimumVelocityThreshold = 2;
 const float confidenceThreshold = 0.11;
 
 // bits of data to pass
-struct signalData {float freq, peak;};
+struct signalData {float freq, peak, weight;};
 
-// TODO the following four funcs might be better off in teh single note tracker class
-// thanks, https://newt.phys.unsw.edu.au/jw/notes.html
+// a function to take a frequenct and return the closest midi note (0-127)
 unsigned char freqToMidiNote(float freq);
 
-
+// a function to take a float and translate it to 0-127
 unsigned char peakToMidiVelocity(float peak);
 
-
+// midi note on with velocity
 void sendNoteOn(unsigned char note, unsigned char velocity);
 
-
+// note off
 void sendNoteOff(unsigned char note);
 
 
@@ -70,12 +69,11 @@ public:
   unsigned char newNote = 0;
   unsigned char currentVel = 0;
   unsigned char newVel = 0;
-  RingBufCPP<unsigned char, peakRingBufferLength> velRingBuf;
-  // array of previous midi notes
-  RingBufCPP<unsigned char, noteRingBufferLength> noteRingBuf;
-  // keep track of current pitch/freq/note?
-  RingBufCPP<float, noteRingBufferLength> freqRingBuf;
-  RingBufCPP<float, peakRingBufferLength> peakRingBuf;
+  RingBufCPP<unsigned char, ringBufferLength> velRingBuf;
+  RingBufCPP<unsigned char, ringBufferLength> noteRingBuf;
+  RingBufCPP<float, ringBufferLength> freqRingBuf;
+  RingBufCPP<float, ringBufferLength> peakRingBuf;
+  RingBufCPP<float, ringBufferLength> probRingBuf;
   AudioAnalyzeNoteFrequency * freqPointer;
   AudioAnalyzePeak * peakPointer;
 
@@ -87,23 +85,22 @@ public:
   void stringSignalToMidi();
 };
 
-// sample the channel and add to ring buf
-// this seems to work now
+// sample the channel and add new data to ring buf
 void SingleNoteTracker::updateSignalData();
 
 
-// TODO funcs for comparing last data vs moving average in note buffer
+// funcs for comparing last data vs moving average in note buffer
 // this seems extra broken ...
 // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
 bool SingleNoteTracker::noteHasChanged();
 
-
+// looking at peak changes
 bool SingleNoteTracker::amplitudeChanged();
 
-
+// looking for either peak or note changes
 bool SingleNoteTracker::hasAnythingChanged();
 
-
+// translating changes to midi notes
 void SingleNoteTracker::stringSignalToMidi();
 
 #endif
