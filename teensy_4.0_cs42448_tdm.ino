@@ -32,8 +32,8 @@ const int midiChannel = 1;
 const int noteRingBufferLength = 8;
 const int peakRingBufferLength = 8;
 
-// when to turn off notes because they fade out. 5 is arbitrary. 
-const int midiMinimumVelocityThreshold = 1;
+// when to turn off notes because they fade out.
+const int midiMinimumVelocityThreshold = 2;
 
 // note frequency confidence factor
 // 0.15 = default. 0.11 = scrutiny
@@ -86,8 +86,8 @@ AudioConnection          patchCord27(mixer1, 0, mixer2, 2);
 AudioControlCS42448      cs42448_1;
 // GUItool: end automatically generated code
 
-std::vector<AudioAnalyzeNoteFrequency> freqs = {notefreq1, notefreq2, notefreq3, notefreq4, notefreq5, notefreq6};
-std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6};
+std::vector<AudioAnalyzeNoteFrequency *> freqs = {&notefreq1, &notefreq2, &notefreq3, &notefreq4, &notefreq5, &notefreq6};
+std::vector<AudioAnalyzePeak *> peaks = {&peak1, &peak2, &peak3, &peak4, &peak5, &peak6};
 //
 // TODO, WIP
 //
@@ -96,7 +96,7 @@ std::vector<AudioAnalyzePeak> peaks = {peak1, peak2, peak3, peak4, peak5, peak6}
 // blinkenlights
 //
 
-long previousMillis = 0;
+// long previousMillis = 0;
 
 struct rgbPins {int r, g, b;};
 
@@ -152,18 +152,21 @@ rgbVals cycleLedRGB (rgbVals v) {
 
 // bits of data to pass
 struct signalData {float freq, peak;};
-struct midiData {int note, velocity;};
+//struct midiData {unsigned int note, velocity;};
 
 // thanks, https://newt.phys.unsw.edu.au/jw/notes.html
-int freqToMidiNote(float freq) {
+unsigned int freqToMidiNote(float freq) {
   // 12 notes per scale, log base 2 (freq / reference freq) + ref freq midi number
   // 12 * (f/440) + 69
-  return( int( roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0 ) );
+  unsigned int ret = roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0;
+  return ret;
+  //return( int( roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0 ) );
 }
 
-int peakToMidiVelocity(float peak) {
+unsigned int peakToMidiVelocity(float peak) {
   // convert float to 0-127 scale
-  return(int(peak * 127.0));
+  unsigned int ret = peak * 127.0;
+  return(ret);
 }
 
 void sendNoteOn(int note, int velocity) {
@@ -222,20 +225,17 @@ void SingleNoteTracker::test() {
 }
 
 // sample the channel and add to ring buf
-// TODO verify this works properly
+// this seems to work now
 void SingleNoteTracker::updateSignalData() {
-  //Serial.printf("Updating %s\n", name);
   int lastFreqIndex = freqRingBuf.numElements(); 
   int lastPeakIndex = peakRingBuf.numElements();
-  //Serial.printf("Last Freq Index: %d\tLast Peak Index: %d\n", lastFreqIndex, lastPeakIndex);
-  //float lastFreq = *freqRingBuf.peek(lastFreqIndex);
-  //float lastPeak = *peakRingBuf.peek(lastPeakIndex);
   float lastFreq = *freqRingBuf.peek(freqRingBuf.numElements() - 1);
-  //float lastFreq = 0.0;
   float lastPeak = *peakRingBuf.peek(peakRingBuf.numElements() - 1);
-  //float lastPeak = 0.0;
+  // buffer is getting filled properly
+  //Serial.printf("FreqIndex: %d\tPeakIndex: %d\n", lastFreqIndex, lastPeakIndex);
+  // lastFreq lastPeak are correct
+  //Serial.printf("Freq: %f\tPeak: %f\n", lastFreq, lastPeak);
   signalData tmpData;
-  // this freqPointer also seems to not work...
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float peak = peakPointer->read();
@@ -249,10 +249,10 @@ void SingleNoteTracker::updateSignalData() {
     tmpData.freq = lastFreq;
     tmpData.peak = lastPeak;
   }
-  // TODO apparently this never works, because we're never
-  // adding things to the ringbufs
-  int midiNote = freqToMidiNote(tmpData.freq);
-  int midiVel = peakToMidiVelocity(tmpData.peak);
+  unsigned int midiNote = freqToMidiNote(tmpData.freq);
+  unsigned int midiVel = peakToMidiVelocity(tmpData.peak);
+  //Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
+  // this has to be working because of the above peek logic working.
   freqRingBuf.add(tmpData.freq, true);
   peakRingBuf.add(tmpData.peak, true);
   noteRingBuf.add(midiNote, true);
@@ -261,15 +261,17 @@ void SingleNoteTracker::updateSignalData() {
 
 
 // TODO funcs for comparing last data vs moving average in note buffer
+// this seems extra broken ...
 // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
 bool SingleNoteTracker::noteHasChanged() {
-  //int bufLen = noteRingBuf.numElements();
+  int bufLen = noteRingBuf.numElements();
   int total;
-  // 
-  for (int i=0; i<noteRingBuf.numElements(); i++) {
-    total += *noteRingBuf.peek(i);
+  for (int i=0; i< buflen; i++) {
+    int noteVal = *noteRingBuf.peek(i);
+    total += noteVal;
   }
-  int average = roundf(float(total) / float(noteRingBuf.numElements()));
+  int average = roundf(float(total) / noteRingBuf.numElements());
+  Serial.printf("total: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
   if (average != currentNote) {
     newNote = average;
     return(true);
@@ -286,7 +288,7 @@ bool SingleNoteTracker::amplitudeChanged() {
     total += *velRingBuf.peek(i);
   }
   // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
-  int average = roundf(float(total) / float(velRingBuf.numElements()));
+  int average = roundf(float(total) / velRingBuf.numElements());
   // TODO if amplitude jumps more than (percent? something?)
   if (average > currentVel) {
     newVel = average;
@@ -303,7 +305,9 @@ bool SingleNoteTracker::amplitudeChanged() {
 
 bool SingleNoteTracker::hasAnythingChanged() {
   bool changed = false;
-  if (noteHasChanged() || amplitudeChanged()) {
+  if (noteHasChanged()) {
+    changed = true;
+  } else if (amplitudeChanged()) {
     changed = true;
   }
   return(changed);
@@ -357,7 +361,7 @@ SingleNoteTracker string5;
 SingleNoteTracker string6;
 
 //vector for stringsNoteTrackers
-std::vector<SingleNoteTracker> strings = {string1, string2, string3, string4, string5, string6};
+std::vector<SingleNoteTracker *> strings = {&string1, &string2, &string3, &string4, &string5, &string6};
 
 
 
@@ -383,17 +387,9 @@ void setup() {
   delay(1000);
 
   // start frequency monitors
-  for( AudioAnalyzeNoteFrequency & freq : freqs) {
-    freq.begin(confidenceThreshold);
+  for( AudioAnalyzeNoteFrequency * freq : freqs) {
+    freq->begin(confidenceThreshold);
   }
-  /*
-  notefreq1.begin(confidenceThreshold);
-  notefreq2.begin(confidenceThreshold);
-  notefreq3.begin(confidenceThreshold);
-  notefreq4.begin(confidenceThreshold);
-  notefreq5.begin(confidenceThreshold);
-  notefreq6.begin(confidenceThreshold);
-  */
 
   // led2 on after frequency analysis starts
   rgbIn(led2,l2v);
@@ -404,15 +400,14 @@ void setup() {
 
   // setup string pointers... 
   int stringStepper = 0;
-  for(SingleNoteTracker & string : strings) {
-    //char *;
-    //int size = asprintf(&x, "%s%s%s", "12", "34", "56");
-    string.freqRingBuf.add(0.0);
-    string.peakRingBuf.add(0.0);
-    string.velRingBuf.add(0);
-    string.noteRingBuf.add(0);
-    string.freqPointer = &freqs[stringStepper]; 
-    string.peakPointer = &peaks[stringStepper];
+  for(SingleNoteTracker * string : strings) {
+    string->freqRingBuf.add(0.0);
+    string->peakRingBuf.add(0.0);
+    string->velRingBuf.add(0);
+    string->noteRingBuf.add(0);
+    // TODO this might not be right here...
+    string->freqPointer = freqs[stringStepper]; 
+    string->peakPointer = peaks[stringStepper];
     stringStepper++;
   }
 
@@ -442,35 +437,26 @@ void loop() {
   
   //Serial.println("Got to start of loop");
   //int stringNumber = 1;
-  for(SingleNoteTracker & string : strings) {
-    // this works...
-    //Serial.printf("String: %d\tCurrent Note: %d\n", stringNumber, string.currentNote);
-    // this works...
-    //string.test();
-    // TODO issues somewhere in below func...
-    string.updateSignalData();
-    //if (string.hasAnythingChanged()) {
+  //
+  for(SingleNoteTracker * string : strings) {
+
+    string->updateSignalData();
+
+    //if (string->hasAnythingChanged()) {
+      //Serial.println("has changed");
       // manage midi notes
-      // string.stringSignalToMidi();
+      //string->stringSignalToMidi();
     //}
     //stringNumber++;
   }
+  //
   
   cycleRGBs();
 
-  // more testing//
-  /*
-  if (notefreq1.available() && peak1.available()) {
-    float freq = notefreq1.read();
-    float peak = peak1.read();
-    int note = freqToMidiNote(freq);
-    int vel = peakToMidiVelocity(peak);
-    Serial.printf("freq: %f\tnote: %d\tpeak: %f\tvel: %d\n", freq, note, peak, vel);
-  }
-  */
 
   // wait more
-  //delay(5000);
+  delay(150);
+  //Serial.println("loop()");
 
   //commented for testing no midi connection yet
   //while (usbMIDI.read()) {
