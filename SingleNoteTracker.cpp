@@ -1,14 +1,10 @@
-// testing grounds!
-// here be dragons
-// and whofferbert hacks, documented in ERRATA.txt
+// here be dragons and whofferbert hacks, documented in ERRATA.txt
 //
 // okay so, general idea here is to take audio data from a guitar or bass.
 // each string has it's own isolated pickup
 // then turn the data from each individual string in to the base frequency and amplitude data.
 // that data will then be analyzed / possibly modulated, and afterward,
 // get translated into midi data, and sent over USB to whatever is powering the thing.
-//
-//  win.
 
 #include <Audio.h>
 #include <Wire.h>
@@ -26,7 +22,7 @@
 unsigned char freqToMidiNote(float freq) {
   // 12 notes per scale, log base 2 (freq / reference freq) + ref freq midi number
   // 12 * (f/440) + 69
-  unsigned int ret = roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0;
+  unsigned char ret = roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0;
   return ret;
 }
 
@@ -39,13 +35,13 @@ unsigned char peakToMidiVelocity(float peak) {
 
 
 void sendNoteOn(unsigned char note, unsigned char velocity) {
-  Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
-  if (note > 127 || note < 0) {
+  if (note > noteMax || note < noteMin) {
     return;
   }
   if (velocity > 127 || velocity < 0) {
     return;
   }
+  Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
   // TODO option for always full velocity?
   // TODO velocity mod?
   usbMIDI.sendNoteOn(int(note), int(velocity), midiChannel);
@@ -53,10 +49,10 @@ void sendNoteOn(unsigned char note, unsigned char velocity) {
 
 
 void sendNoteOff(unsigned char note) {
-  Serial.printf("Would have sent note %d OFF\n", note);
-  if (note > 127 || note < 0) {
+  if (note > noteMax || note < noteMin) {
     return;
   }
+  Serial.printf("Would have sent note %d OFF\n", note);
   usbMIDI.sendNoteOff(note, 0, midiChannel);
 }
 
