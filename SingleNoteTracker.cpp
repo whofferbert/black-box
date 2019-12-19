@@ -23,7 +23,7 @@ unsigned char freqToMidiNote(float freq) {
   // 12 notes per scale, log base 2 (freq / reference freq) + ref freq midi number
   // 12 * (f/440) + 69
   unsigned char ret = roundf( 12.0 * log2f( freq / 440.0 ) ) + 69.0;
-  return ret;
+  return(ret);
 }
 
 
@@ -41,10 +41,10 @@ void SingleNoteTracker::sendNoteOn(unsigned char note, unsigned char velocity) {
   if (velocity > 127 || velocity < midiMinimumVelocityThreshold) {
     return;
   }
-  //Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
+  Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
   // TODO option for always full velocity?
   // TODO velocity mod?
-  usbMIDI.sendNoteOn(int(note), int(velocity), midiChannel);
+  usbMIDI.sendNoteOn(note, velocity, midiChannel);
 }
 
 
@@ -52,18 +52,17 @@ void SingleNoteTracker::sendNoteOff(unsigned char note) {
   if (note > noteMax || note < noteMin) {
     return;
   }
-  //Serial.printf("Would have sent note %d OFF\n", note);
+  Serial.printf("Would have sent note %d OFF\n", note);
   usbMIDI.sendNoteOff(note, 0, midiChannel);
 }
-
 
 // sample the channel and add to ring buf
 // this seems to work now
 void SingleNoteTracker::updateSignalData() {
   int lastFreqIndex = freqRingBuf.numElements(); 
   int lastPeakIndex = peakRingBuf.numElements();
-  float lastFreq = *freqRingBuf.peek(freqRingBuf.numElements() - 1);
-  float lastPeak = *peakRingBuf.peek(peakRingBuf.numElements() - 1);
+  float lastFreq = *freqRingBuf.peek(lastFreqIndex - 1);
+  float lastPeak = *peakRingBuf.peek(lastPeakIndex - 1);
   // buffer is getting filled properly
   //Serial.printf("FreqIndex: %d\tPeakIndex: %d\n", lastFreqIndex, lastPeakIndex);
   // lastFreq lastPeak are correct
@@ -72,36 +71,41 @@ void SingleNoteTracker::updateSignalData() {
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float peak = peakPointer->read();
-    float prob = freqPointer->probability();
+    //float prob = freqPointer->probability();
     tmpData.freq = note;
     tmpData.peak = peak;
-    tmpData.weight = prob;
+    //tmpData.weight = prob;
   //} else if (freqPointer->available() || peakPointer->available()) {
   } else if (freqPointer->available()) {
     // TODO there might be issues with this logic...
     // like what happens when a signal goes away
     // and the last signal we had was over the thresholds?
-    float prob = freqPointer->probability();
+    //float prob = freqPointer->probability();
     tmpData.freq = lastFreq;
     tmpData.peak = lastPeak;
-    tmpData.weight = prob;
+    //tmpData.weight = prob;
   } else {
+
+  // TODO there needs to be better logic here perhaps
+  // like if we don't get a signal, don't log a 0 immediately?
+  // timer logic something something?
+
     tmpData.freq = 0.0;
     tmpData.peak = 0.0;
-    tmpData.weight = 0.0;
+    //tmpData.weight = 0.0;
   }
 
   unsigned char midiNote = freqToMidiNote(tmpData.freq);
   unsigned char midiVel = peakToMidiVelocity(tmpData.peak);
 
-  //if (name == 0) {
-    //Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
-  //}
+  if (name == 1) {
+    Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
+  }
 
   // this has to be working because of the above peek logic working.
   freqRingBuf.add(tmpData.freq, true);
   peakRingBuf.add(tmpData.peak, true);
-  probRingBuf.add(tmpData.weight, true);
+  //probRingBuf.add(tmpData.weight, true);
   noteRingBuf.add(midiNote, true);
   velRingBuf.add(midiVel, true);
 }
@@ -122,8 +126,8 @@ bool SingleNoteTracker::noteHasChanged() {
     total += noteVal;
   }
   unsigned char average = total / bufLen;
-  //if (name == 0) {
-    //Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+  //if (name == 1) {
+  //  Serial.printf("total: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
   //}
   if (average != currentNote) {
     //Serial.printf("Want to turn on note %d\n", average);
@@ -140,7 +144,7 @@ bool SingleNoteTracker::noteHasChanged() {
 bool SingleNoteTracker::amplitudeChanged() {
   bool changed = false;
   int bufLen = velRingBuf.numElements();
-  int total = 0;
+  unsigned char total = 0;
   for (int i=0; i< bufLen; i++) {
     total += *velRingBuf.peek(i);
     //if (name == 0) {
@@ -148,18 +152,21 @@ bool SingleNoteTracker::amplitudeChanged() {
     //}
   }
   // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
-  int average = total / bufLen;
+  unsigned char average = total / bufLen;
   //if (name == 0) {
-    //Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+  //  Serial.printf("total: %d\tcurrentVel: %d\tBuffer Average: %d\n", total , currentVel, average);
   //}
   // TODO if amplitude jumps more than (percent? something?)
   if (average > currentVel) {
+    //Serial.printf("Want to turn resend note %d\n", average);
     newVel = average;
     changed = true;
   } else if (average <= midiMinimumVelocityThreshold) {
     newVel = average;
     turnNoteOff = true;
     changed = true;
+  } else {
+    //newVel = average;
   }
 
   return(changed);
@@ -182,6 +189,8 @@ bool SingleNoteTracker::hasAnythingChanged() {
 //  The most finesse will probably be required here
 // 
 // 
+
+// TODO currently we're getting lots of note off signals
 
 void SingleNoteTracker::stringSignalToMidi() {
   // TODO based on things, turn off/on notes
