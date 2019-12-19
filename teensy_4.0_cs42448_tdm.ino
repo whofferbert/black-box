@@ -71,7 +71,7 @@ void serialPrinter() {
   if (currentMillis - previousSerialMillis > intervalSerialMillis) {
     previousSerialMillis = currentMillis;
     // possibly serial print things here
-    Serial.println("got here");
+    //Serial.println("got here");
   }
 }
 
@@ -164,7 +164,7 @@ void setup() {
   Serial.begin(9600);
 
   delay(750);
-  Serial.println("got past audio chip init and serial begin");
+  Serial.println("Audio chip init");
   delay(750);
 
   // start frequency monitors
@@ -176,7 +176,7 @@ void setup() {
   led2.on();
 
   delay(750);
-  Serial.println("got past frequency config");
+  Serial.println("Frequency config");
   delay(750);
 
   // setup string pointers... 
@@ -197,7 +197,7 @@ void setup() {
   led3.on();
 
   delay(750);
-  Serial.println("got past string setup");
+  Serial.println("String setup");
   delay(750);
 }
 
