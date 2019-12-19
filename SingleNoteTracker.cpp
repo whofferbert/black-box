@@ -49,6 +49,9 @@ void SingleNoteTracker::sendNoteOn(unsigned char note, unsigned char velocity) {
 
 
 void SingleNoteTracker::sendNoteOff(unsigned char note) {
+  if (noteIsOn == false) {
+    return;
+  }
   if (note > noteMax || note < noteMin) {
     return;
   }
@@ -98,9 +101,9 @@ void SingleNoteTracker::updateSignalData() {
   unsigned char midiNote = freqToMidiNote(tmpData.freq);
   unsigned char midiVel = peakToMidiVelocity(tmpData.peak);
 
-  if (name == 1) {
-    Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
-  }
+  //if (name == 1) {
+  //  Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
+  //}
 
   // this has to be working because of the above peek logic working.
   freqRingBuf.add(tmpData.freq, true);
