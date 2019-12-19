@@ -24,7 +24,7 @@ const unsigned char noteMax = 100; // high E7, 36th fret
 
 // midi channel selection
 // is this 0 or 1 based?
-const int midiChannel = 1;
+const int midiChannel = 0;
 
 // local ring buffer lengths.
 // note: must be multiple of 2!
