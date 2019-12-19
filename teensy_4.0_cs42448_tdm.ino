@@ -183,11 +183,11 @@ void setup() {
   // TODO maybe there should be a new/init method that does this?
   unsigned char stringStepper = 0;
   for(SingleNoteTracker * string : strings) {
-    string->name = stringStepper;
     string->freqRingBuf.add(0.0);
     string->peakRingBuf.add(0.0);
     string->velRingBuf.add(0);
     string->noteRingBuf.add(0);
+    string->name = stringStepper;
     string->freqPointer = freqs[stringStepper]; 
     string->peakPointer = peaks[stringStepper];
     stringStepper++;
@@ -213,8 +213,8 @@ void loop() {
 
     string->updateSignalData();
 
+    // manage midi notes
     if (string->hasAnythingChanged()) {
-      // manage midi notes
       string->stringSignalToMidi();
     }
   }
@@ -222,6 +222,9 @@ void loop() {
   cycleRGBs();
 
   //serialPrinter();
+
+  //debug delay
+  //delay(100);
 
   //commented for testing no midi connection yet
   while (usbMIDI.read()) {
