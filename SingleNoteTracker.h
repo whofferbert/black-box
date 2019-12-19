@@ -36,25 +36,15 @@ const int ringBufferLength = 8;
 // when to turn off notes because they fade out.
 const int midiMinimumVelocityThreshold = 2;
 
-// note frequency confidence factor
-// 0.15 = default. 0.11 = scrutiny
-const float confidenceThreshold = 0.10;
-
 // bits of data to pass
-struct signalData {float freq, peak, weight;};
+//struct signalData {float freq, peak, weight;};
+struct signalData {float freq, peak;};
 
 // a function to take a frequenct and return the closest midi note (0-127)
 unsigned char freqToMidiNote(float freq);
 
 // a function to take a float and translate it to 0-127
 unsigned char peakToMidiVelocity(float peak);
-
-// midi note on with velocity
-void sendNoteOn(unsigned char note, unsigned char velocity);
-
-// note off
-void sendNoteOff(unsigned char note);
-
 
 // maybe investigate how to apply volume control/fade per active midi note, for decay
 // single string monitoring
