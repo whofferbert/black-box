@@ -74,7 +74,8 @@ void serialPrinter() {
     // possibly serial print things here
     //Serial.println("got here");
     int usage = AudioProcessorUsage();
-    Serial.printf("Audio Processor Usage: %d\n",  usage);
+    int maxUsage = AudioProcessorUsageMax();
+    Serial.printf("Audio Processor: Current Usage: %d\tMax Usage: %d\n",  usage, maxUsage);
   }
 }
 
