@@ -34,25 +34,25 @@ unsigned char peakToMidiVelocity(float peak) {
 }
 
 
-void sendNoteOn(unsigned char note, unsigned char velocity) {
+void SingleNoteTracker::sendNoteOn(unsigned char note, unsigned char velocity) {
   if (note > noteMax || note < noteMin) {
     return;
   }
-  if (velocity > 127 || velocity < 0) {
+  if (velocity > 127 || velocity < midiMinimumVelocityThreshold) {
     return;
   }
-  Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
+  //Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
   // TODO option for always full velocity?
   // TODO velocity mod?
   usbMIDI.sendNoteOn(int(note), int(velocity), midiChannel);
 }
 
 
-void sendNoteOff(unsigned char note) {
+void SingleNoteTracker::sendNoteOff(unsigned char note) {
   if (note > noteMax || note < noteMin) {
     return;
   }
-  Serial.printf("Would have sent note %d OFF\n", note);
+  //Serial.printf("Would have sent note %d OFF\n", note);
   usbMIDI.sendNoteOff(note, 0, midiChannel);
 }
 
@@ -116,14 +116,17 @@ bool SingleNoteTracker::noteHasChanged() {
     //}
     total += noteVal;
   }
-  unsigned char average = roundf(float(total) / bufLen);
+  unsigned char average = total / bufLen;
+  //if (name == 0) {
+    //Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+  //}
   if (average != currentNote) {
-    //if (name == 0) {
-    //  Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
-    //}
+    //Serial.printf("Want to turn on note %d\n", average);
     newNote = average;
     return(true);
   } else {
+    // testing?
+    newNote = currentNote;
     return(false);
   }
 }
@@ -131,12 +134,19 @@ bool SingleNoteTracker::noteHasChanged() {
 
 bool SingleNoteTracker::amplitudeChanged() {
   bool changed = false;
-  int total;
-  for (int i=0; i<velRingBuf.numElements(); i++) {
+  int bufLen = velRingBuf.numElements();
+  int total = 0;
+  for (int i=0; i< bufLen; i++) {
     total += *velRingBuf.peek(i);
+    //if (name == 0) {
+    //  Serial.printf("%d %d;\t", i, noteVal);
+    //}
   }
   // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
-  int average = roundf(float(total) / velRingBuf.numElements());
+  int average = total / bufLen;
+  //if (name == 0) {
+    //Serial.printf("\ntotal: %d\tcurrentNote: %d\tBuffer Average: %d\n", total , currentNote, average);
+  //}
   // TODO if amplitude jumps more than (percent? something?)
   if (average > currentVel) {
     newVel = average;
@@ -161,6 +171,12 @@ bool SingleNoteTracker::hasAnythingChanged() {
   return(changed);
 }
 
+
+// 
+// 
+//  The most finesse will probably be required here
+// 
+// 
 
 void SingleNoteTracker::stringSignalToMidi() {
   // TODO based on things, turn off/on notes
@@ -190,11 +206,13 @@ void SingleNoteTracker::stringSignalToMidi() {
   }
 
   // mmmmm
-  if ( newNote != currentNote) {
-    currentNote = newNote;
-  }
-  if ( newVel != currentVel) {
-    currentVel = newVel;
+  if (noteWasChanged == true) {
+    if ( newNote != currentNote) {
+      currentNote = newNote;
+    }
+    if ( newVel != currentVel) {
+      currentVel = newVel;
+    }
   }
 }
 
