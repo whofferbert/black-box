@@ -30,6 +30,7 @@ const int midiChannel = 1;
 // note: must be multiple of 2!
 // maybe make this 16? 24?
 const int ringBufferLength = 8;
+//const int ringBufferLength = 24;
 
 // TODO not implemented yet
 // when to turn off notes because they fade out.
@@ -37,7 +38,7 @@ const int midiMinimumVelocityThreshold = 2;
 
 // note frequency confidence factor
 // 0.15 = default. 0.11 = scrutiny
-const float confidenceThreshold = 0.11;
+const float confidenceThreshold = 0.10;
 
 // bits of data to pass
 struct signalData {float freq, peak, weight;};
@@ -83,11 +84,17 @@ public:
   bool amplitudeChanged();
   bool hasAnythingChanged();
   void stringSignalToMidi();
+  void sendNoteOn(unsigned char note, unsigned char velocity);
+  void sendNoteOff(unsigned char note);
+
 };
 
 // sample the channel and add new data to ring buf
 void SingleNoteTracker::updateSignalData();
 
+// notes
+void SingleNoteTracker::sendNoteOn(unsigned char note, unsigned char velocity);
+void SingleNoteTracker::sendNoteOff(unsigned char note);
 
 // funcs for comparing last data vs moving average in note buffer
 // this seems extra broken ...
