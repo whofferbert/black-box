@@ -72,19 +72,23 @@ void SingleNoteTracker::updateSignalData() {
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float peak = peakPointer->read();
-    //float prob = freqPointer->probability();
+    float prob = freqPointer->probability();
     tmpData.freq = note;
     tmpData.peak = peak;
+    tmpData.weight = prob;
   //} else if (freqPointer->available() || peakPointer->available()) {
   } else if (freqPointer->available()) {
     // TODO there might be issues with this logic...
     // like what happens when a signal goes away
     // and the last signal we had was over the thresholds?
+    float prob = freqPointer->probability();
     tmpData.freq = lastFreq;
     tmpData.peak = lastPeak;
+    tmpData.weight = prob;
   } else {
     tmpData.freq = 0.0;
     tmpData.peak = 0.0;
+    tmpData.weight = 0.0;
   }
 
   unsigned char midiNote = freqToMidiNote(tmpData.freq);
@@ -97,6 +101,7 @@ void SingleNoteTracker::updateSignalData() {
   // this has to be working because of the above peek logic working.
   freqRingBuf.add(tmpData.freq, true);
   peakRingBuf.add(tmpData.peak, true);
+  probRingBuf.add(tmpData.weight, true);
   noteRingBuf.add(midiNote, true);
   velRingBuf.add(midiVel, true);
 }
