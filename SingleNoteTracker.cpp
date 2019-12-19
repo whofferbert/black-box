@@ -6,6 +6,17 @@
 // that data will then be analyzed / possibly modulated, and afterward,
 // get translated into midi data, and sent over USB to whatever is powering the thing.
 
+
+//
+// GENERAL IDEAS, since we migth not be able to sample things hyper frequently and current logic is borken.
+//
+// string decay is generally a relationship between string weight and pitch, based on velocity
+// low notes ring longer than high notes
+// might be able to include some extra sanity for things by having a table of what frequencies would decay over what rates
+// and then apply those rates to whatever velocity things start at
+// new note E2 with velocity 50? it'll ring for X ms. add a timer check and if >, then turn note off
+// new note E6 with velocity 10? Y ms, etc... picture gotten
+
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -16,6 +27,9 @@
 // https://github.com/wizard97/Embedded_RingBuf_CPP
 #include "RingBufCPP.h"
 #include "SingleNoteTracker.h"
+
+// TODO 
+// should each string be on it's own midi channel for note on/off separation?
 
 // TODO the following four funcs might be better off in teh single note tracker class
 // thanks, https://newt.phys.unsw.edu.au/jw/notes.html
