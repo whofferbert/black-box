@@ -36,7 +36,7 @@ unsigned long previousLedMillis = 0;
 unsigned long intervalLedMillis = 3;
 
 unsigned long previousSerialMillis = 0;
-unsigned long intervalSerialMillis = 1000;
+unsigned long intervalSerialMillis = 30000;
 
 unsigned long previousAudioMillis = 0;
 unsigned long intervalAudioMillis = 75;
