@@ -1,5 +1,4 @@
 //
-//
 // blinkenlights, rgb led class
 // common anode
 //
