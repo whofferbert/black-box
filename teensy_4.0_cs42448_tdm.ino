@@ -1,6 +1,4 @@
-// testing grounds!
-// here be dragons
-// and whofferbert hacks, documented in ERRATA.txt
+// here be dragons and whofferbert hacks, documented in ERRATA.txt
 //
 // okay so, general idea here is to take audio data from a guitar or bass.
 // each string has it's own isolated pickup
@@ -17,8 +15,8 @@
 #include <vector>
 // https://github.com/wizard97/Embedded_RingBuf_CPP
 #include "RingBufCPP.h"
-#include "Blinkenlights.h"
 #include "SingleNoteTracker.h"
+#include "Blinkenlights.h"
 
 // best current fix for both of: 
 // undefined reference to `__exidx_end'
@@ -35,10 +33,13 @@ unsigned __exidx_end;
 unsigned long currentMillis = 0;
 
 unsigned long previousLedMillis = 0;
-unsigned long intervalLedMillis = 2;
+unsigned long intervalLedMillis = 3;
 
 unsigned long previousSerialMillis = 0;
 unsigned long intervalSerialMillis = 1000;
+
+unsigned long previousAudioMillis = 0;
+unsigned long intervalAudioMillis = 75;
 
 //
 // LED stuff
@@ -72,6 +73,8 @@ void serialPrinter() {
     previousSerialMillis = currentMillis;
     // possibly serial print things here
     //Serial.println("got here");
+    int usage = AudioProcessorUsage();
+    Serial.printf("Audio Processor Usage: %d\n",  usage);
   }
 }
 
@@ -169,7 +172,8 @@ void setup() {
 
   // start frequency monitors
   for( AudioAnalyzeNoteFrequency * freq : freqs) {
-    freq->begin(confidenceThreshold);
+    // 0.15 is default
+    freq->begin(0.11);
   }
 
   // led2 on after frequency analysis starts
@@ -202,6 +206,21 @@ void setup() {
 }
 
 
+void updateStringData() {
+  if (currentMillis - previousAudioMillis > intervalAudioMillis) {
+    previousAudioMillis = currentMillis;
+    for(SingleNoteTracker * string : strings) {
+      //Serial.println("got here");
+      string->updateSignalData();
+  
+      // manage midi notes
+      if (string->hasAnythingChanged()) {
+        string->stringSignalToMidi();
+      }
+    }
+  }
+}
+
 
 void loop() {
   // update timer for things
@@ -209,22 +228,11 @@ void loop() {
 
   // audio interaction
   // update strings signal data
-  for(SingleNoteTracker * string : strings) {
+  updateStringData();
 
-    string->updateSignalData();
-
-    // manage midi notes
-    if (string->hasAnythingChanged()) {
-      string->stringSignalToMidi();
-    }
-  }
-  
   cycleRGBs();
 
-  //serialPrinter();
-
-  //debug delay
-  //delay(100);
+  serialPrinter();
 
   //commented for testing no midi connection yet
   while (usbMIDI.read()) {
