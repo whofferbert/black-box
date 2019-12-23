@@ -230,6 +230,7 @@ bool SingleNoteTracker::amplitudeChanged() {
     changed = true;
   //} else if (lastPeak <= midiMinimumVelocityThreshold) {
   //  newVel = lastPeak;
+  // TODO the following is broken, at least by merit of turnNoteOff being problematic
   } else if (average <= midiMinimumVelocityThreshold) {
     newVel = average;
     turnNoteOff = true;
@@ -241,6 +242,8 @@ bool SingleNoteTracker::amplitudeChanged() {
   return(changed);
 }
 
+
+// TODO this is music... should we assume there will always be change?
 
 bool SingleNoteTracker::hasAnythingChanged() {
   if (noteHasChanged() || amplitudeChanged()) {
