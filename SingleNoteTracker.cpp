@@ -266,7 +266,8 @@ void SingleNoteTracker::stringSignalToMidi() {
   // handle turning notes off...
   if (newVel > currentVel) sendNoteOff(currentNote);
   if (newNote != currentNote) sendNoteOff(currentNote);
-  if (turnNoteOff == true) sendNoteOff(currentNote);
+  // TODO this seems broken!!
+  //if (turnNoteOff == true) sendNoteOff(currentNote);
 
   bool noteWasChanged = false;
   if (newNote != currentNote && noteIsOn == false) {
