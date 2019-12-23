@@ -41,24 +41,39 @@ unsigned char freqToMidiNote(float freq) {
 }
 
 
-unsigned char peakToMidiVelocity(float peak) {
+signed char peakToMidiVelocity(float peak) {
   // convert float to 0-127 scale
-  unsigned char ret = peak * 127.0;
+  signed char num = peak * 127.0;
+  signed char ret;
+  if (num < 127 && num > midiMinimumVelocityThreshold) {
+    ret = 127;
+  } else {
+    ret = 0;
+  }
   return(ret);
+  
 }
 
+//
+// you can Serial.print to debug the midi, maybe better to watch 
+// aseqdump -p (port of this thing)
+//
 
-void SingleNoteTracker::sendNoteOn(unsigned char note, unsigned char velocity) {
+void SingleNoteTracker::sendNoteOn(unsigned char note, signed char velocity) {
   if (note > noteMax || note < noteMin) {
     return;
   }
-  if (velocity > 127 || velocity < midiMinimumVelocityThreshold) {
+  if (velocity == 0) {
     return;
   }
-  Serial.printf("Would have sent note %d ON, vel %d\n", note, velocity);
+  //if (velocity > 127 || velocity < midiMinimumVelocityThreshold) {
+  //  return;
+  //}
+  Serial.printf("Would have sent note %d ON, vel %d\n", note, 127);
   // TODO option for always full velocity?
   // TODO velocity mod?
-  usbMIDI.sendNoteOn(note, velocity, midiChannel);
+  usbMIDI.sendNoteOn(note, 127, midiChannel);
+  noteIsOn = true;
 }
 
 
@@ -71,10 +86,15 @@ void SingleNoteTracker::sendNoteOff(unsigned char note) {
   }
   Serial.printf("Would have sent note %d OFF\n", note);
   usbMIDI.sendNoteOff(note, 0, midiChannel);
+  noteIsOn = false;
+  // TODO this logic is probably unnecessary
+  turnNoteOff = false;
 }
 
 // sample the channel and add to ring buf
 // this seems to work now
+// TODO .... if there's nothing available, don't do anything with
+// the ring buffers?
 void SingleNoteTracker::updateSignalData() {
   int lastFreqIndex = freqRingBuf.numElements(); 
   int lastPeakIndex = peakRingBuf.numElements();
@@ -85,47 +105,61 @@ void SingleNoteTracker::updateSignalData() {
   // lastFreq lastPeak are correct
   //Serial.printf("Freq: %f\tPeak: %f\n", lastFreq, lastPeak);
   signalData tmpData;
+  bool ringBufAdd = false;
   if (freqPointer->available() && peakPointer->available()) {
     float note = freqPointer->read();
     float peak = peakPointer->read();
-    //float prob = freqPointer->probability();
+    float prob = freqPointer->probability();
     tmpData.freq = note;
     tmpData.peak = peak;
-    //tmpData.weight = prob;
-  //} else if (freqPointer->available() || peakPointer->available()) {
-  } else if (freqPointer->available()) {
-    // TODO there might be issues with this logic...
-    // like what happens when a signal goes away
-    // and the last signal we had was over the thresholds?
-    //float prob = freqPointer->probability();
-    tmpData.freq = lastFreq;
-    tmpData.peak = lastPeak;
-    //tmpData.weight = prob;
+    tmpData.weight = prob;
+    ringBufAdd = true;
+  } else if (peakPointer->available()) {
+    float note = lastFreq;
+    float prob = 0.5; // 50/50 might be generous
+    float peak = peakPointer->read();
+    tmpData.freq = note;
+    tmpData.peak = peak;
+    tmpData.weight = prob;
+    ringBufAdd = true;
   } else {
-
-  // TODO there needs to be better logic here perhaps
-  // like if we don't get a signal, don't log a 0 immediately?
-  // timer logic something something?
-
-    tmpData.freq = 0.0;
-    tmpData.peak = 0.0;
-    //tmpData.weight = 0.0;
+    Serial.println("Nothing available");
   }
 
-  unsigned char midiNote = freqToMidiNote(tmpData.freq);
-  unsigned char midiVel = peakToMidiVelocity(tmpData.peak);
+  // else turn note off?
 
-  //if (name == 1) {
-  //  Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\n", tmpData.freq, tmpData.peak, midiNote, midiVel);
-  //}
+  if (ringBufAdd == true) {
+    unsigned char midiNote = freqToMidiNote(tmpData.freq);
+    signed char midiVel = peakToMidiVelocity(tmpData.peak);
 
-  // this has to be working because of the above peek logic working.
-  freqRingBuf.add(tmpData.freq, true);
-  peakRingBuf.add(tmpData.peak, true);
-  //probRingBuf.add(tmpData.weight, true);
-  noteRingBuf.add(midiNote, true);
-  velRingBuf.add(midiVel, true);
+    // debugging... most of the time it'll be a freq guess at .5 prob. 
+    if (name == 1 && midiVel != 0) {
+      Serial.printf("\nFreq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\tProb: %f\n", tmpData.freq, tmpData.peak, midiNote, midiVel, tmpData.weight);
+    }
+    //
+    /*
+    if (name == 1 && midiVel != 0 && tmpData.weight != 0.5) {
+      Serial.printf("\nFreq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\tProb: %f\n", tmpData.freq, tmpData.peak, midiNote, midiVel, tmpData.weight);
+    }
+    if (name == 1 && midiVel != 0 && tmpData.weight == 0.5) {
+      Serial.print(".");
+    }
+    */
+
+    // this has to be working because of the above peek logic working.
+    freqRingBuf.add(tmpData.freq, true);
+    peakRingBuf.add(tmpData.peak, true);
+    //probRingBuf.add(tmpData.weight, true);
+    noteRingBuf.add(midiNote, true);
+    velRingBuf.add(midiVel, true);
+    //velRingBuf.add(midiVel * velocityMod, true);
+    // rely on velocity note offing?
+  }
+
 }
+
+
+
 
 
 // TODO funcs for comparing last data vs moving average in note buffer
@@ -133,6 +167,15 @@ void SingleNoteTracker::updateSignalData() {
 // if there's a new note (reliably), turn old note off, new note on... how to weight that properly
 bool SingleNoteTracker::noteHasChanged() {
   int bufLen = noteRingBuf.numElements();
+  unsigned char tmpNote = *noteRingBuf.peek(bufLen - 1);
+  if (tmpNote != currentNote) {
+    newNote = tmpNote;
+    return(true);
+  } else {
+    // = tmpNote;
+    return(false);
+  }
+  /*
   unsigned char total = 0;
   for (int i=0; i< bufLen; i++) {
     // notebuf
@@ -155,13 +198,16 @@ bool SingleNoteTracker::noteHasChanged() {
     newNote = currentNote;
     return(false);
   }
+  */
 }
 
 
 bool SingleNoteTracker::amplitudeChanged() {
   bool changed = false;
   int bufLen = velRingBuf.numElements();
-  unsigned char total = 0;
+  //signed char lastPeak = *velRingBuf.peek(bufLen - 1);
+  
+  signed char total = 0;
   for (int i=0; i< bufLen; i++) {
     total += *velRingBuf.peek(i);
     //if (name == 0) {
@@ -169,15 +215,21 @@ bool SingleNoteTracker::amplitudeChanged() {
     //}
   }
   // if the amplitude jumps (threshold diff up) back up but for the same note, then turn old note off and back on.
-  unsigned char average = total / bufLen;
+  signed char average = total / bufLen;
+  
+
   //if (name == 0) {
   //  Serial.printf("total: %d\tcurrentVel: %d\tBuffer Average: %d\n", total , currentVel, average);
   //}
   // TODO if amplitude jumps more than (percent? something?)
+  //if (lastPeak > currentVel) {
   if (average > currentVel) {
     //Serial.printf("Want to turn resend note %d\n", average);
+    //newVel = lastPeak;
     newVel = average;
     changed = true;
+  //} else if (lastPeak <= midiMinimumVelocityThreshold) {
+  //  newVel = lastPeak;
   } else if (average <= midiMinimumVelocityThreshold) {
     newVel = average;
     turnNoteOff = true;
@@ -191,8 +243,7 @@ bool SingleNoteTracker::amplitudeChanged() {
 
 
 bool SingleNoteTracker::hasAnythingChanged() {
-  bool changed = false;
-  if (noteHasChanged()) {
+  if (noteHasChanged() || amplitudeChanged()) {
     changed = true;
   } else if (amplitudeChanged()) {
     changed = true;
@@ -212,27 +263,20 @@ bool SingleNoteTracker::hasAnythingChanged() {
 void SingleNoteTracker::stringSignalToMidi() {
   // TODO based on things, turn off/on notes
   // TODO this might need to be different, like run every check func first, THEN step through note changes
+  // this fires too much
   // handle turning notes off...
-  bool noteWasTurnedOff = false;
-  if (newVel > currentVel || newNote != currentNote || turnNoteOff == true) {
-    // turn note off first
-    sendNoteOff(currentNote);
-    // mark that the note has been turned off
-    noteIsOn = false;
-    // mark that this fired?
-    noteWasTurnedOff = true;
-  }
+  if (newVel > currentVel) sendNoteOff(currentNote);
+  if (newNote != currentNote) sendNoteOff(currentNote);
+  if (turnNoteOff == true) sendNoteOff(currentNote);
 
   bool noteWasChanged = false;
   if (newNote != currentNote && noteIsOn == false) {
     // TODO an override for max velocity every time?
     // TODO sane to use newVel here?
     sendNoteOn(newNote, newVel);
-    noteIsOn = true;
     noteWasChanged = true;
   } else if (newVel > currentVel && noteIsOn == false) {
     sendNoteOn(currentNote, newVel);
-    noteIsOn = true;
     noteWasChanged = true;
   }
 
