@@ -28,7 +28,15 @@ had to replace Arduino/libraries/RingBufCPP/RingBufCPP.h with a newer version of
 
 
 ================ 3 ===================
-reserved
+
+To shave some clock cycles off i dropped the default 24 to 18:
+#define AUDIO_GUITARTUNER_BLOCKS  18
+into hardware/teensy/avr/libraries/Audio/analyze_notefreq.h
+
+that still allows for detection of 41hz e4 (low e bass)
+i might further lower that number, raising the minimum detection to around
+80 hz if it'll be used exclusively for guitar.
+
 ================ 4 ===================
 reserved
 ================ 5 ===================
