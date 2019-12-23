@@ -33,7 +33,7 @@ const float outputLevel = 1.0; // 0-1
 const float inputLevel = 12.0; // 0-15
 
 // freq closeness
-const float freqProb = 0.11;
+const float freqProb = 0.13;
 
 //
 // timer stuff
@@ -44,13 +44,14 @@ unsigned long currentMillis = 0;
 unsigned long previousLedMillis = 0;
 //unsigned long intervalLedMillis = 100;
 // 2-3 is really quick, nice lookin
-unsigned long intervalLedMillis = 11;
+const unsigned long intervalLedMillis = 11;
 
 unsigned long previousSerialMillis = 0;
-unsigned long intervalSerialMillis = 30000;
+//unsigned long intervalSerialMillis = 30000;
+const unsigned long intervalSerialMillis = 1000;
 
 unsigned long previousAudioMillis = 0;
-unsigned long intervalAudioMillis = 3;
+const unsigned long intervalAudioMillis = 3;
 
 //
 // LED stuff
