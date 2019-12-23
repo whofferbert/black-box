@@ -244,11 +244,10 @@ bool SingleNoteTracker::amplitudeChanged() {
 
 bool SingleNoteTracker::hasAnythingChanged() {
   if (noteHasChanged() || amplitudeChanged()) {
-    changed = true;
-  } else if (amplitudeChanged()) {
-    changed = true;
+    return(true);
+  } else {
+    return(false);
   }
-  return(changed);
 }
 
 
