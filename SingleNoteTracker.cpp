@@ -132,19 +132,19 @@ void SingleNoteTracker::updateSignalData() {
     unsigned char midiNote = freqToMidiNote(tmpData.freq);
     signed char midiVel = peakToMidiVelocity(tmpData.peak);
 
-    // debugging... most of the time it'll be a freq guess at .5 prob. 
+    /* debugging... most of the time it'll be a freq guess at .5 prob. 
     if (name == 1 && midiVel != 0) {
-      Serial.printf("\nFreq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\tProb: %f\n", tmpData.freq, tmpData.peak, midiNote, midiVel, tmpData.weight);
+      Serial.printf("Freq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\tProb: %f\n", tmpData.freq, tmpData.peak, midiNote, midiVel, tmpData.weight);
     }
+    */
     //
-    /*
     if (name == 1 && midiVel != 0 && tmpData.weight != 0.5) {
       Serial.printf("\nFreq: %f\tPeak: %f\tMidi Note:%d\tVel: %d\tProb: %f\n", tmpData.freq, tmpData.peak, midiNote, midiVel, tmpData.weight);
     }
     if (name == 1 && midiVel != 0 && tmpData.weight == 0.5) {
       Serial.print(".");
     }
-    */
+    //
 
     // this has to be working because of the above peek logic working.
     freqRingBuf.add(tmpData.freq, true);
