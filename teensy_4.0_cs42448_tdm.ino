@@ -26,6 +26,15 @@ unsigned __exidx_end;
 // re: https://forum.pjrc.com/threads/57192-Teensy-4-0-linker-issues-with-STL-libraries
 // might break things that are already broken, but it's over my head
 
+// 
+// Audio Chip Settings
+// 
+const float outputLevel = 1.0; // 0-1
+const float inputLevel = 12.0; // 0-15
+
+// freq closeness
+const float freqProb = 0.11;
+
 //
 // timer stuff
 //
@@ -33,13 +42,15 @@ unsigned __exidx_end;
 unsigned long currentMillis = 0;
 
 unsigned long previousLedMillis = 0;
-unsigned long intervalLedMillis = 3;
+//unsigned long intervalLedMillis = 100;
+// 2-3 is really quick, nice lookin
+unsigned long intervalLedMillis = 11;
 
 unsigned long previousSerialMillis = 0;
 unsigned long intervalSerialMillis = 30000;
 
 unsigned long previousAudioMillis = 0;
-unsigned long intervalAudioMillis = 75;
+unsigned long intervalAudioMillis = 3;
 
 //
 // LED stuff
@@ -145,13 +156,14 @@ SingleNoteTracker string6;
 // vector for stringsNoteTracker pointers
 std::vector<SingleNoteTracker *> strings = {&string1, &string2, &string3, &string4, &string5, &string6};
 
+
 void setup() {
   // setup audio chip first, for as short a blip as possible
   // loooots of audio memory; thank you, teensy 4
   AudioMemory(512);
   cs42448_1.enable();
-  cs42448_1.volume(1.0);
-  cs42448_1.inputLevel(3.0);
+  cs42448_1.volume(outputLevel);
+  cs42448_1.inputLevel(inputLevel);
 
   // setup LEDs
   led1.pins = {0, 1, 2};
@@ -174,7 +186,7 @@ void setup() {
   // start frequency monitors
   for( AudioAnalyzeNoteFrequency * freq : freqs) {
     // 0.15 is default
-    freq->begin(0.11);
+    freq->begin(freqProb);
   }
 
   // led2 on after frequency analysis starts
@@ -213,6 +225,14 @@ void updateStringData() {
     for(SingleNoteTracker * string : strings) {
       //Serial.println("got here");
       string->updateSignalData();
+
+      // 
+      // TODO this is bad. it could be much better.
+      // rather than a (any changes? do stuff) loop, there should be
+      // a thing like 'process changes' where certain criteria are checked
+      // and actions are taken appropriately. something functional, not all
+      // this side-effecting bullshit we've got now.
+      // 
   
       // manage midi notes
       if (string->hasAnythingChanged()) {
