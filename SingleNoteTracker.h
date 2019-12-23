@@ -23,28 +23,35 @@ const unsigned char noteMin = 21;  // 5 string bass with a low A0
 const unsigned char noteMax = 100; // high E7, 36th fret
 
 // midi channel selection
-// is this 0 or 1 based?
-const int midiChannel = 0;
+// this is 1 based; channel 1 shows up as channel 0 on the receiver
+const int midiChannel = 1;
 
 // local ring buffer lengths.
 // note: must be multiple of 2!
-// maybe make this 16? 24?
-const int ringBufferLength = 8;
+// maybe make this 8? 16? 24?
+//const int ringBufferLength = 4;
+// i don't think we can sample frequency enough to make use
+// of a ring buffer here. velocity maybe
+const int ringBufferLength = 4;
 //const int ringBufferLength = 24;
 
-// TODO not implemented yet
 // when to turn off notes because they fade out.
 const int midiMinimumVelocityThreshold = 2;
 
+const float minPitch = .0175;
+
+// velocidy modifier. multiply singal velocity by this number. will not break 127
+//const unsigned char velocityMod = 3;
+
 // bits of data to pass
-//struct signalData {float freq, peak, weight;};
-struct signalData {float freq, peak;};
+struct signalData {float freq, peak, weight;};
+//struct signalData {float freq, peak;};
 
 // a function to take a frequenct and return the closest midi note (0-127)
 unsigned char freqToMidiNote(float freq);
 
 // a function to take a float and translate it to 0-127
-unsigned char peakToMidiVelocity(float peak);
+signed char peakToMidiVelocity(float peak);
 
 // maybe investigate how to apply volume control/fade per active midi note, for decay
 // single string monitoring
@@ -58,8 +65,8 @@ public:
   bool turnNoteOff = false;
   unsigned char currentNote = 0;
   unsigned char newNote = 0;
-  unsigned char currentVel = 0;
-  unsigned char newVel = 0;
+  signed char currentVel = 0;
+  signed char newVel = 0;
   RingBufCPP<unsigned char, ringBufferLength> velRingBuf;
   RingBufCPP<unsigned char, ringBufferLength> noteRingBuf;
   RingBufCPP<float, ringBufferLength> freqRingBuf;
@@ -74,7 +81,7 @@ public:
   bool amplitudeChanged();
   bool hasAnythingChanged();
   void stringSignalToMidi();
-  void sendNoteOn(unsigned char note, unsigned char velocity);
+  void sendNoteOn(unsigned char note, signed char velocity);
   void sendNoteOff(unsigned char note);
 
 };
@@ -83,7 +90,7 @@ public:
 void SingleNoteTracker::updateSignalData();
 
 // notes
-void SingleNoteTracker::sendNoteOn(unsigned char note, unsigned char velocity);
+void SingleNoteTracker::sendNoteOn(unsigned char note, signed char velocity);
 void SingleNoteTracker::sendNoteOff(unsigned char note);
 
 // funcs for comparing last data vs moving average in note buffer
